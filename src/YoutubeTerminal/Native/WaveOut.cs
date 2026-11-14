@@ -64,6 +64,16 @@ internal sealed unsafe partial class WaveOut : IDisposable
     private static partial uint waveOutClose(IntPtr hwo);
     [LibraryImport("winmm.dll")]
     private static partial uint waveOutGetPosition(IntPtr hwo, MMTIME* time, uint size);
+    [LibraryImport("winmm.dll")]
+    private static partial uint waveOutSetVolume(IntPtr hwo, uint volume);
+
+    /// <summary>Głośność strumienia (0..1) — działa natychmiast, także dla dźwięku już zbuforowanego.</summary>
+    public void SetVolume(float volume)
+    {
+        if (_disposed) return;
+        uint v = (uint)Math.Round(Math.Clamp(volume, 0f, 1f) * 0xFFFF);
+        waveOutSetVolume(_hwo, v | (v << 16));
+    }
 
     private IntPtr _hwo;
     private readonly WAVEHDR*[] _headers;

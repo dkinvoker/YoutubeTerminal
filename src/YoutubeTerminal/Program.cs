@@ -6,9 +6,15 @@ using YoutubeTerminal.UI;
 if (args.Length > 0 && args[0].StartsWith("--diag", StringComparison.Ordinal))
     return await Diagnostics.RunAsync(args);
 
+if (args.Length > 0 && (args[0] is "-v" or "--version"))
+{
+    Console.WriteLine(AppInfo.Title);
+    return 0;
+}
+
 if (args.Length > 0 && (args[0] is "-h" or "--help" or "/?"))
 {
-    Console.WriteLine("YouTube Terminal — przeglądarka YouTube w terminalu z wideo przez Sixel.");
+    Console.WriteLine($"{AppInfo.Title} — przeglądarka YouTube w terminalu z wideo przez Sixel.");
     Console.WriteLine();
     Console.WriteLine("Użycie: YoutubeTerminal.exe [fraza wyszukiwania | link do filmu/kanału/playlisty]");
     Console.WriteLine();

@@ -155,7 +155,9 @@ internal static class TextUtil
             void FlushWord()
             {
                 if (word.Length == 0) return;
-                if (curW + wordW <= width)
+                // Spacja kończąca słowo nie musi mieścić się w linii — na końcu wiersza i tak jest obcinana.
+                int visibleW = word[^1] == ' ' ? wordW - 1 : wordW;
+                if (curW + visibleW <= width)
                 {
                     cur.Append(word);
                     curW += wordW;
@@ -169,10 +171,11 @@ internal static class TextUtil
                         curW = 0;
                     }
                     // Słowo dłuższe niż linia — dzielimy twardo.
-                    if (wordW > width)
+                    if (visibleW > width)
                     {
                         foreach (var (g, gw) in Graphemes(word.ToString()))
                         {
+                            if (g == " " && curW + gw > width) continue; // spacja nie zaczyna nowej linii
                             if (curW + gw > width)
                             {
                                 lines.Add(cur.ToString());

@@ -427,7 +427,7 @@ internal sealed class Mp4Demuxer
             if (i + 1 < segs.Count)
             {
                 var ns = segs[i + 1];
-                next = Task.Run(() => _http.Read(ns.Offset, (int)ns.Size, ct), ct);
+                next = HttpRangeReader.Observed(Task.Run(() => _http.Read(ns.Offset, (int)ns.Size, ct), ct));
             }
             foreach (var s in ParseFragments(data, seg.Offset))
                 yield return s;

@@ -10,7 +10,8 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>YoutubeTerminal</RootNamespace>
     <AssemblyName>YoutubeTerminal</AssemblyName>
-    <Version>1.0.0</Version>
+    <!-- Wersję podbija automatycznie release-please (patrz README → Wersje i wydania) -->
+    <Version>1.0.0</Version> <!-- x-release-please-version -->
     <Product>YouTube Terminal</Product>
     <Description>Przeglądarka YouTube w terminalu z odtwarzaniem wideo przez Sixel</Description>
 

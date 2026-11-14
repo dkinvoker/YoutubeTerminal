@@ -38,6 +38,7 @@ internal sealed class SubscriptionsView : View
     private List<VideoItem> _allVideos = new();
 
     public override string Title => "Subskrypcje";
+    public override ItemList? FocusedList => Current;
 
     public void MarkDirty() => _dirty = true;
 
@@ -191,6 +192,7 @@ internal sealed class HistoryView : View
     }
 
     public override string Title => "Historia";
+    public override ItemList? FocusedList => _list;
 
     public override void OnShow() => Refresh();
 
@@ -261,6 +263,7 @@ internal sealed class WatchLaterView : View
     private readonly ItemList _list = new() { EmptyText = "Lista jest pusta. Dodawaj filmy klawiszem w." };
 
     public override string Title => "Do obejrzenia";
+    public override ItemList? FocusedList => _list;
 
     public override void OnShow()
     {

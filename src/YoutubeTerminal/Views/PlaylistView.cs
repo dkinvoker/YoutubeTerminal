@@ -28,6 +28,7 @@ internal sealed class PlaylistView : View
     }
 
     public override string Title => _page?.Playlist.Title is { Length: > 0 } t ? t : _item.Title.Length > 0 ? _item.Title : "Playlista";
+    public override ItemList? FocusedList => _list;
 
     private List<VideoItem> Videos => _list.Items.OfType<VideoItem>().Where(v => !v.IsUpcoming).ToList();
 

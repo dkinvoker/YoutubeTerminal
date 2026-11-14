@@ -10,18 +10,21 @@ internal static unsafe class ColorConvert
 
     static ColorConvert()
     {
+        // Pełna precyzja współczynników (zakres ograniczony: Y 16–235, C 16–240).
+        // +512 w tablicy Y zaokrągla wynik przesunięcia >>10 zamiast go obcinać (biel = 255, nie 254).
+        const double ys = 255.0 / 219.0;
         for (int i = 0; i < 256; i++)
         {
-            YTab[i] = (int)Math.Round(1.164 * (i - 16) * 1024);
+            YTab[i] = (int)Math.Round(ys * (i - 16) * 1024) + 512;
             int c = i - 128;
-            Rv601[i] = (int)Math.Round(1.596 * c * 1024);
-            Gu601[i] = (int)Math.Round(-0.392 * c * 1024);
-            Gv601[i] = (int)Math.Round(-0.813 * c * 1024);
-            Bu601[i] = (int)Math.Round(2.017 * c * 1024);
-            Rv709[i] = (int)Math.Round(1.793 * c * 1024);
-            Gu709[i] = (int)Math.Round(-0.213 * c * 1024);
-            Gv709[i] = (int)Math.Round(-0.533 * c * 1024);
-            Bu709[i] = (int)Math.Round(2.112 * c * 1024);
+            Rv601[i] = (int)Math.Round(1.596027 * c * 1024);
+            Gu601[i] = (int)Math.Round(-0.391762 * c * 1024);
+            Gv601[i] = (int)Math.Round(-0.812968 * c * 1024);
+            Bu601[i] = (int)Math.Round(2.017232 * c * 1024);
+            Rv709[i] = (int)Math.Round(1.792741 * c * 1024);
+            Gu709[i] = (int)Math.Round(-0.213249 * c * 1024);
+            Gv709[i] = (int)Math.Round(-0.532909 * c * 1024);
+            Bu709[i] = (int)Math.Round(2.112402 * c * 1024);
         }
         for (int i = 0; i < Clamp.Length; i++)
             Clamp[i] = (byte)Math.Clamp(i - 1024, 0, 255);

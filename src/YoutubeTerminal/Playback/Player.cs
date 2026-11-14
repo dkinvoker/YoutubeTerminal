@@ -51,8 +51,21 @@ internal sealed class Player : IDisposable
     public string StatusText { get; private set; } = "Pobieranie informacji o strumieniu…";
     public string? Error { get; private set; }
     public TimeSpan Duration { get; private set; }
-    public int Volume { get; set; } = 80;
-    public bool Muted { get; set; }
+    private int _volume = 80;
+    private bool _muted;
+
+    /// <summary>Głośność 0–100; zmiana działa natychmiast (głośność ustawiana na wyjściu audio).</summary>
+    public int Volume
+    {
+        get => _volume;
+        set { _volume = Math.Clamp(value, 0, 100); _session?.ApplyVolume(); }
+    }
+
+    public bool Muted
+    {
+        get => _muted;
+        set { _muted = value; _session?.ApplyVolume(); }
+    }
     public bool Paused { get; private set; }
     public bool Seeking => _restartTimer != null;
 
@@ -451,6 +464,8 @@ internal sealed class Player : IDisposable
             _presentThread.Start();
         }
 
+        public void ApplyVolume() => _wave?.SetVolume(_p.EffectiveVolume);
+
         public void SetPaused(bool paused)
         {
             _paused = paused;
@@ -581,11 +596,12 @@ internal sealed class Player : IDisposable
                     if (_wave == null)
                     {
                         _wave = new WaveOut(rate, ch, bufferCount: 8);
+                        _wave.SetVolume(_p.EffectiveVolume);
                         _wave.Pause();
                         _audioBase = TimeSpan.FromTicks(Math.Max(startTicks, time));
                         _audioBaseSet = true;
                     }
-                    _wave.Write(pcm[Math.Min(skip, pcm.Length)..], _p.EffectiveVolume, ct);
+                    _wave.Write(pcm[Math.Min(skip, pcm.Length)..], 1f, ct); // głośność ustawia SetVolume
                     if (!_audioReady.IsSet && _wave.SubmittedFrames >= rate * 3 / 10) _audioReady.Set();
                 };
 

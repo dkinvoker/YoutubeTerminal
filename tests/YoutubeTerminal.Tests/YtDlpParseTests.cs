@@ -59,7 +59,7 @@ public class YtDlpParseTests
         Assert.True(info.IsLive);
     }
 
-    [Fact(Skip = "Znany błąd: brak pól vcodec/acodec traktowany jak strumień z pustym adresem zamiast zgłoszenia błędu.")]
+    [Fact]
     public void Parse_NoStreamsThrows()
     {
         Assert.Throws<InvalidOperationException>(() => YtDlp.Parse("""{"id":"x","title":"t"}""", audioOnly: false));

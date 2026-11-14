@@ -26,6 +26,7 @@ internal sealed class ChannelView : View
 
     private readonly string _titleHint;
     public override string Title => _page?.Channel.Title is { Length: > 0 } t ? t : _titleHint.Length > 0 ? _titleHint : "Kanał";
+    public override ItemList? FocusedList => _list;
 
     private void Load(string? tabParams, bool initial)
     {

@@ -91,11 +91,65 @@ internal static class YtDlp
 
     private static string Key(string id, int h, bool a) => $"{id}|{h}|{a}";
 
-    public static async Task<StreamInfo> ResolveAsync(string videoId, int maxHeight, bool audioOnly, CancellationToken ct)
+    private static readonly Dictionary<string, Task<StreamInfo>> InFlight = new();
+
+    /// <summary>Faktyczne uruchomienie yt-dlp (podmieniane w testach).</summary>
+    internal static Func<string, int, bool, CancellationToken, Task<StreamInfo>> Runner = RunAsync;
+
+    public static bool IsResolving(string videoId, int maxHeight, bool audioOnly)
+    {
+        lock (CacheLock) return InFlight.ContainsKey(Key(videoId, maxHeight, audioOnly));
+    }
+
+    /// <summary>
+    /// Zwraca adresy strumieni. Wynik jest zapamiętywany na 2 h, a równoczesne zapytania o ten sam film
+    /// (np. pobieranie z wyprzedzeniem i start odtwarzania) czekają na jeden proces yt-dlp.
+    /// Anulowanie <paramref name="ct"/> przerywa tylko oczekiwanie, nie wspólne zadanie.
+    /// </summary>
+    public static Task<StreamInfo> ResolveAsync(string videoId, int maxHeight, bool audioOnly, CancellationToken ct)
     {
         var cached = TryGetCached(videoId, maxHeight, audioOnly);
-        if (cached != null) return cached;
+        if (cached != null) return Task.FromResult(cached);
 
+        string key = Key(videoId, maxHeight, audioOnly);
+        Task<StreamInfo> task;
+        lock (CacheLock)
+        {
+            if (!InFlight.TryGetValue(key, out task!))
+            {
+                task = ResolveSharedAsync(key, videoId, maxHeight, audioOnly);
+                if (!task.IsCompleted) InFlight[key] = task;
+            }
+        }
+        return task.WaitAsync(ct);
+    }
+
+    private static async Task<StreamInfo> ResolveSharedAsync(string key, string videoId, int maxHeight, bool audioOnly)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            var info = await Runner(videoId, maxHeight, audioOnly, timeout.Token).ConfigureAwait(false);
+            lock (CacheLock)
+            {
+                if (Cache.Count > 50) Cache.Clear();
+                Cache[key] = info;
+            }
+            return info;
+        }
+        finally
+        {
+            lock (CacheLock) InFlight.Remove(key);
+        }
+    }
+
+    internal static void ClearCache()
+    {
+        lock (CacheLock) Cache.Clear();
+    }
+
+    private static async Task<StreamInfo> RunAsync(string videoId, int maxHeight, bool audioOnly, CancellationToken ct)
+    {
         string exe = FindExecutable() ?? throw new InvalidOperationException("Nie znaleziono yt-dlp.exe – odtwarzanie jest niedostępne.");
         var psi = CreateStartInfo(exe);
         AddCommonArgs(psi);
@@ -122,13 +176,7 @@ internal static class YtDlp
         if (proc.ExitCode != 0 || string.IsNullOrWhiteSpace(stdout))
             throw new InvalidOperationException("yt-dlp: " + ExtractError(stderr));
 
-        var info = Parse(stdout, audioOnly);
-        lock (CacheLock)
-        {
-            if (Cache.Count > 50) Cache.Clear();
-            Cache[Key(videoId, maxHeight, audioOnly)] = info;
-        }
-        return info;
+        return Parse(stdout, audioOnly);
     }
 
     private static string ExtractError(string stderr)
@@ -158,12 +206,14 @@ internal static class YtDlp
         {
             foreach (var f in rf.EnumerateArray())
             {
+                string furl = Str(f, "url");
+                if (furl.Length == 0) continue;
                 string vcodec = Str(f, "vcodec"), acodec = Str(f, "acodec");
                 bool hasVideo = vcodec.Length > 0 && vcodec != "none";
                 bool hasAudio = acodec.Length > 0 && acodec != "none";
                 if (hasVideo && info.VideoUrl == null)
                 {
-                    info.VideoUrl = Str(f, "url");
+                    info.VideoUrl = furl;
                     info.Width = (int)Num(f, "width");
                     info.Height = (int)Num(f, "height");
                     info.Fps = Num(f, "fps");
@@ -171,7 +221,7 @@ internal static class YtDlp
                 }
                 if (hasAudio && info.AudioUrl == null)
                 {
-                    info.AudioUrl = Str(f, "url");
+                    info.AudioUrl = furl;
                     info.AudioCodec = acodec;
                 }
             }
@@ -179,10 +229,11 @@ internal static class YtDlp
         else
         {
             // Pojedynczy format (np. połączony obraz+dźwięk albo samo audio).
+            // Nieznany kodek ("" ) traktujemy jak obecny, ale bez adresu nie ma strumienia.
             string url = Str(root, "url");
             string vcodec = Str(root, "vcodec"), acodec = Str(root, "acodec");
-            bool hasVideo = vcodec != "none" && !audioOnly;
-            bool hasAudio = acodec != "none";
+            bool hasVideo = url.Length > 0 && vcodec != "none" && !audioOnly;
+            bool hasAudio = url.Length > 0 && acodec != "none";
             if (hasVideo)
             {
                 info.VideoUrl = url;

@@ -97,7 +97,7 @@ internal sealed class Renderer
 
     public void Invalidate() => _full = true;
 
-    public void Render(ScreenBuffer back, Terminal term, bool syncOutput)
+    public void Render(ScreenBuffer back, ITerminalOutput term, bool syncOutput)
     {
         FullRedrawHappened = false;
         ExternalChanged = false;

@@ -170,6 +170,33 @@ Testy jednostkowe (xUnit, bez dostępu do internetu: strumienie MP4/HLS serwuje 
 dotnet test tests\YoutubeTerminal.Tests
 ```
 
+## Wersje i wydania
+
+Numer wersji (`YoutubeTerminal.exe --version`) i wydania na GitHubie powstają automatycznie, na
+podstawie opisów commitów w formacie [Conventional Commits](https://www.conventionalcommits.org/pl/v1.0.0/):
+
+| Początek opisu commita | Skutek |
+| --- | --- |
+| `fix: …` | wersja poprawkowa, np. 1.0.0 → 1.0.1 |
+| `feat: …` | nowa funkcja, np. 1.0.1 → 1.1.0 |
+| `feat!: …` albo `BREAKING CHANGE:` w treści | wersja główna, np. 1.1.0 → 2.0.0 |
+| `perf:`, `docs:`, `test:`, `refactor:`, `ci:`, `chore:` | bez nowej wersji (`perf:` trafia do listy zmian) |
+
+Przebieg:
+
+1. Push na `main` uruchamia testy (workflow **CI**) oraz release-please (workflow **Release**).
+2. release-please otwiera lub aktualizuje pull request „chore(main): release X.Y.Z” z nową wersją
+   w `YoutubeTerminal.csproj` i wpisami w `CHANGELOG.md`.
+3. Scalenie tego PR tworzy tag `vX.Y.Z` i wydanie na GitHubie. Workflow pobiera wtedy oficjalny
+   yt-dlp (ze sprawdzeniem sumy SHA-256), uruchamia testy i buduje `YoutubeTerminal.exe` (Native AOT),
+   a potem dołącza go do wydania razem z plikiem `.sha256`.
+
+Pliki istniejącego wydania można przebudować ręcznie: **Actions → Release → Run workflow** z podanym tagiem.
+
+Jednorazowo w ustawieniach repozytorium na GitHubie trzeba zaznaczyć:
+**Settings → Actions → General → Workflow permissions → „Allow GitHub Actions to create and approve pull requests”**
+(inaczej release-please nie otworzy PR wydania).
+
 Polecenia diagnostyczne (bez TUI):
 
 - `--diag-yt "fraza"`: test API;

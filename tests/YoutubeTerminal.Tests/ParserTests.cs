@@ -412,6 +412,55 @@ public class ParserTests
     }
 
     [Fact]
+    public void ParsePlaylistPage_NewHeaderWithAvatarStackAuthor()
+    {
+        // Struktura z prawdziwej odpowiedzi YouTube (listopad 2026): autor w avatarStackViewModel
+        var root = N("""
+            {"metadata":{"playlistMetadataRenderer":{"title":"Lofi Hip Hop"}},
+             "header":{"pageHeaderRenderer":{"content":{"pageHeaderViewModel":{
+                "title":{"dynamicTextViewModel":{"text":{"content":"Lofi Hip Hop"}}},
+                "metadata":{"contentMetadataViewModel":{"metadataRows":[
+                   {"metadataParts":[{"avatarStack":{"avatarStackViewModel":{
+                      "avatars":[{"avatarViewModel":{"image":{"sources":[{"url":"https://yt3/a","width":48}]}}}],
+                      "text":{"content":"autor: Mimi Lofi Chill","commandRuns":[{"startIndex":0,"length":22,"onTap":{"innertubeCommand":{"browseEndpoint":{"browseId":"UCq9J_CUURRfbP7vm4VN_3xg","canonicalBaseUrl":"/@mimilofichill"}}}}]}}}}]},
+                   {"metadataParts":[{"text":{"content":"Playlista"}},{"text":{"content":"76 filmów"}},{"text":{"content":"132 660 wyświetleń"}}]}]}}}}}},
+             "contents":{"twoColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{}}}]}}}
+            """);
+        var page = Parsers.ParsePlaylist(root, "PLXIclLvfETS3AgCnZg4N6QqHu_T27XKIq");
+
+        Assert.Equal("Mimi Lofi Chill", page.Playlist.ChannelName);
+        Assert.Equal("UCq9J_CUURRfbP7vm4VN_3xg", page.Playlist.ChannelId);
+        Assert.Equal("76 filmów", page.Playlist.VideoCountText);
+        Assert.Equal("132 660 wyświetleń", page.ViewsText);
+    }
+
+    [Theory]
+    [InlineData("autor: Mimi Lofi Chill", "Mimi Lofi Chill")]
+    [InlineData("by Lofi Girl", "Lofi Girl")]
+    [InlineData("Lofi Girl", "Lofi Girl")]
+    [InlineData("autor: Lofi: beats", "Lofi: beats")]
+    [InlineData("Bardzo długa nazwa kanału: druga część", "Bardzo długa nazwa kanału: druga część")]
+    public void StripAuthorPrefix(string input, string expected)
+    {
+        Assert.Equal(expected, Parsers.StripAuthorPrefix(input));
+    }
+
+    [Fact]
+    public void ParseLockup_MixHasNoFakeAuthorOrCount()
+    {
+        var mix = Assert.IsType<PlaylistItem>(Parsers.ParseLockup(N("""
+            {"contentId":"RDEMO2FjWQVcgyvtgcHiWlf5-Q","contentType":"LOCKUP_CONTENT_TYPE_PLAYLIST",
+             "contentImage":{"collectionThumbnailViewModel":{"primaryThumbnail":{"thumbnailViewModel":{
+                "overlays":[{"thumbnailOverlayBadgeViewModel":{"thumbnailBadges":[{"thumbnailBadgeViewModel":{"text":"Składanka"}}]}}]}}}},
+             "metadata":{"lockupMetadataViewModel":{"title":{"content":"Składanka – Lofi Hip Hop"},
+                "metadata":{"contentMetadataViewModel":{"metadataRows":[{"metadataParts":[{"text":{"content":"YouTube"}},{"text":{"content":"Playlista"}}]}]}}}}}
+            """)));
+        Assert.True(mix.IsMix);
+        Assert.Equal("", mix.ChannelName);
+        Assert.Equal("", mix.VideoCountText);
+    }
+
+    [Fact]
     public void ParsePlaylistPage_ClassicHeader()
     {
         var root = N("""

@@ -24,12 +24,9 @@ internal sealed class App
     private readonly Renderer _renderer = new();
     private ScreenBuffer _screen = new(80, 25);
     private readonly BlockingCollection<InputEvent> _input = new();
-    private readonly ConcurrentQueue<Action> _posted = new();
-    private readonly AutoResetEvent _wake = new(false);
+    private readonly UiDispatcher _ui = new();
     private InputReader? _reader;
-    private volatile bool _dirty = true;
     private bool _quit;
-    private int _busy;
     private int _spinFrame;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private long _lastRender;
@@ -93,7 +90,7 @@ internal sealed class App
                         Post(() => _quit = true);
                         break;
                 }
-                _wake.Set();
+                _ui.Wake();
             }
         });
     }
@@ -119,8 +116,10 @@ internal sealed class App
     public int CellWidth => Term.CellWidth;
     public int CellHeight => Term.CellHeight;
     public bool ListThumbnails => Settings.ListThumbnails && ImageMode == RenderMode.Sixel;
-    public string Spinner => "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[_spinFrame % 10].ToString();
-    public bool Busy => _busy > 0;
+    public string Spinner => UI.Spinner.At(_clock.ElapsedMilliseconds);
+    public bool Busy => _ui.Busy > 0;
+    /// <summary>Czy cokolwiek wczytuje się w tle (także bez komunikatu w pasku stanu).</summary>
+    public bool Loading => _ui.InFlight > 0;
 
     public App(List<string> startupMessages)
     {
@@ -138,8 +137,8 @@ internal sealed class App
     public void Run()
     {
         Term.Init();
-        Term.SetTitle("YouTube Terminal");
-        _reader = new InputReader(Term, _input, () => _wake.Set());
+        Term.SetTitle(AppInfo.Title);
+        _reader = new InputReader(Term, _input, _ui.Wake);
         _reader.Start();
         DetectTerminal();
         ApplyGraphicsSettings();
@@ -240,6 +239,9 @@ internal sealed class App
         Invalidate();
     }
 
+    /// <summary>Wysokość strumienia, o którą prosimy yt-dlp (ta sama dla pobierania z wyprzedzeniem i odtwarzacza).</summary>
+    public int StreamHeight() => Settings.StreamQuality > 0 ? Settings.StreamQuality : PlayerView.AutoHeightFor(Term);
+
     public PlayerOptions CreatePlayerOptions(bool audioOnly = false) => new()
     {
         MaxHeight = Settings.StreamQuality,
@@ -262,8 +264,8 @@ internal sealed class App
     {
         while (!_quit)
         {
-            bool animating = _busy > 0 || Top is PlayerView;
-            _wake.WaitOne(animating ? 40 : 200);
+            bool animating = _ui.InFlight > 0 || Top is PlayerView;
+            _ui.Wait(animating ? 40 : 200);
 
             while (_input.TryTake(out var ev))
             {
@@ -271,32 +273,30 @@ internal sealed class App
                 catch (Exception ex) { Log.Error("UI", ex); ShowError("Błąd: " + ex.Message); }
                 if (_quit) return;
             }
-            while (_posted.TryDequeue(out var a))
-            {
-                try { a(); }
-                catch (Exception ex) { Log.Error("UI", ex); ShowError("Błąd: " + ex.Message); }
-            }
+            _ui.RunPending(ex => { Log.Error("UI", ex); ShowError("Błąd: " + ex.Message); });
 
             if (Term.UpdateSize())
             {
                 _screen = new ScreenBuffer(Term.Width, Term.Height);
                 _renderer.Invalidate();
-                _dirty = true;
+                _ui.Invalidate();
             }
 
             long now = _clock.ElapsedMilliseconds;
-            int frame = (int)(now / 90);
-            if (_busy > 0 && frame != _spinFrame) { _spinFrame = frame; _dirty = true; }
-            if (_message.Length > 0 && DateTime.UtcNow > _messageUntil) { _message = ""; _dirty = true; }
+            // Wskaźnik ładowania kręci się przy każdym zadaniu w tle (także „cichym”, np. komentarzach).
+            int frame = UI.Spinner.FrameIndex(now);
+            if (_ui.InFlight > 0 && frame != _spinFrame) { _spinFrame = frame; _ui.Invalidate(); }
+            if (_message.Length > 0 && DateTime.UtcNow > _messageUntil) { _message = ""; _ui.Invalidate(); }
             try
             {
-                if (Top.Tick()) _dirty = true;
+                if (Top.Tick()) _ui.Invalidate();
+                Prefetch.Tick(Top);
             }
             catch (Exception ex) { Log.Error("UI", ex); ShowError("Błąd: " + ex.Message); }
 
-            if (_dirty && now - _lastRender >= 15)
+            if (_ui.IsDirty && now - _lastRender >= 15)
             {
-                _dirty = false;
+                _ui.ConsumeDirty();
                 _lastRender = now;
                 Render();
             }
@@ -379,7 +379,7 @@ internal sealed class App
             right = _message;
             rightSt = _messageError ? new Style(0xFF6B6B, Theme.Panel, Attr.Bold) : new Style(Theme.Text, Theme.Panel);
         }
-        else if (_busy > 0) right = Spinner + " Wczytywanie…";
+        else if (_ui.Busy > 0) right = Spinner + " Wczytywanie…";
 
         int rightW = Math.Min(TextUtil.Width(right), r.W / 2 + 10);
         int limit = r.Right - rightW - 2;
@@ -403,7 +403,7 @@ internal sealed class App
 
     private void HandleInput(InputEvent ev)
     {
-        _dirty = true;
+        _ui.Invalidate();
         switch (ev)
         {
             case ResizeEvent:
@@ -686,17 +686,10 @@ internal sealed class App
 
     // ===================== Wątki / komunikaty =====================
 
-    public void Post(Action a)
-    {
-        _posted.Enqueue(a);
-        _wake.Set();
-    }
+    /// <summary>Wykonuje akcję w wątku interfejsu (i przerysowuje ekran).</summary>
+    public void Post(Action a) => _ui.Post(a);
 
-    public void Invalidate()
-    {
-        _dirty = true;
-        _wake.Set();
-    }
+    public void Invalidate() => _ui.Invalidate();
 
     public void ShowMessage(string msg, int seconds = 4)
     {
@@ -717,32 +710,7 @@ internal sealed class App
     /// <summary>Wykonuje pracę w tle, a wynik przekazuje do wątku UI.</summary>
     public void RunAsync<T>(Func<CancellationToken, Task<T>> work, Action<T> onDone, Action<Exception>? onError = null,
         bool quiet = false, CancellationToken ct = default)
-    {
-        if (!quiet) Interlocked.Increment(ref _busy);
-        Invalidate();
-        Task.Run(async () =>
-        {
-            try
-            {
-                var result = await work(ct).ConfigureAwait(false);
-                Post(() =>
-                {
-                    if (!quiet) _busy--;
-                    if (!ct.IsCancellationRequested) onDone(result);
-                });
-            }
-            catch (Exception ex)
-            {
-                Post(() =>
-                {
-                    if (!quiet) _busy--;
-                    if (ex is OperationCanceledException && ct.IsCancellationRequested) return;
-                    if (onError != null) onError(ex);
-                    else ShowError(ex.Message);
-                });
-            }
-        });
-    }
+        => _ui.RunAsync(work, onDone, onError ?? (ex => ShowError(ex.Message)), quiet, ct);
 
     public void Quit() => _quit = true;
 }

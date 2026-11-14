@@ -14,6 +14,17 @@ internal sealed class HttpRangeReader
     /// <summary>Współdzielony klient do pobierania strumieni (segmenty HLS itp.).</summary>
     public static HttpClient Shared => Http;
 
+    /// <summary>
+    /// Oznacza błąd zadania pobierania z wyprzedzeniem jako odebrany — gdy odtwarzanie zostanie przerwane,
+    /// zanim ktoś odczyta wynik, wyjątek nie trafia do dziennika jako „nieobserwowany”.
+    /// </summary>
+    public static Task<T> Observed<T>(Task<T> task)
+    {
+        task.ContinueWith(static t => _ = t.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return task;
+    }
+
     public string Url { get; }
     public long Length { get; private set; } = -1;
 

@@ -144,32 +144,39 @@ internal sealed class LibraryData
 internal sealed class Library
 {
     private readonly object _lock = new();
+    private readonly string? _path;
     public LibraryData Data { get; private set; } = new();
 
-    public static Library Load()
+    /// <param name="path">Plik biblioteki; null = biblioteka tylko w pamięci (bez zapisu na dysk).</param>
+    public Library(string? path = null) => _path = path;
+
+    public static Library Load() => Load(AppPaths.LibraryFile);
+
+    public static Library Load(string path)
     {
-        var lib = new Library();
+        var lib = new Library(path);
         try
         {
-            if (File.Exists(AppPaths.LibraryFile))
-                lib.Data = JsonSerializer.Deserialize(File.ReadAllText(AppPaths.LibraryFile), StorageJson.Default.LibraryData) ?? new LibraryData();
+            if (File.Exists(path))
+                lib.Data = JsonSerializer.Deserialize(File.ReadAllText(path), StorageJson.Default.LibraryData) ?? new LibraryData();
         }
         catch
         {
             // Uszkodzony plik — zachowujemy kopię i zaczynamy od nowa.
-            try { File.Copy(AppPaths.LibraryFile, AppPaths.LibraryFile + ".bak", true); } catch { }
+            try { File.Copy(path, path + ".bak", true); } catch { }
         }
         return lib;
     }
 
     public void Save()
     {
+        if (_path == null) return;
         lock (_lock)
         {
             try
             {
-                AppPaths.EnsureCreated();
-                Settings.AtomicWrite(AppPaths.LibraryFile, JsonSerializer.Serialize(Data, StorageJson.Default.LibraryData));
+                if (Path.GetDirectoryName(_path) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+                Settings.AtomicWrite(_path, JsonSerializer.Serialize(Data, StorageJson.Default.LibraryData));
             }
             catch { }
         }

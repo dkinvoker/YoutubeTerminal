@@ -75,6 +75,14 @@ public class TextUtilTests
     }
 
     [Fact]
+    public void Wrap_NoLineStartsWithSpace()
+    {
+        var lines = TextUtil.Wrap("abcd efgh abcdefgh ij", 4);
+        Assert.All(lines, l => Assert.False(l.StartsWith(' '), $"'{l}'"));
+        Assert.Equal(["abcd", "efgh", "abcd", "efgh", "ij"], lines);
+    }
+
+    [Fact]
     public void Wrap_BreaksWordsLongerThanLine()
     {
         Assert.Equal(["abcd", "efgh", "ij"], TextUtil.Wrap("abcdefghij", 4));
@@ -101,7 +109,7 @@ public class TextUtilTests
         Assert.Empty(TextUtil.Wrap("abc", 0));
     }
 
-    [Fact(Skip = "Znany błąd: spacja po słowie liczy się do szerokości, więc linia mieszcząca się co do znaku jest łamana za wcześnie.")]
+    [Fact]
     public void Wrap_FillsLineExactlyToWidth()
     {
         Assert.Equal(["ala ma", "kota"], TextUtil.Wrap("ala ma kota", 6));

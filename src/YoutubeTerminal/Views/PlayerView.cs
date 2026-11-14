@@ -90,7 +90,7 @@ internal sealed class PlayerView : View
         _player?.Dispose();
         _player = null;
         App.Settings.Save();
-        App.Term.SetTitle("YouTube Terminal");
+        App.Term.SetTitle(AppInfo.Title);
     }
 
     private void SaveHistory()
@@ -447,7 +447,8 @@ internal sealed class PlayerView : View
             x += s.Text(x + 1, y2, vol, new Style(Theme.Dim, bg)) + 3;
             string mode = p.Options.AudioOnly ? "♪ audio" : p.Options.Mode == RenderMode.Sixel ? "Sixel" : "Półbloki";
             x += s.Text(x, y2, mode, new Style(Theme.Dim, bg)) + 3;
-            if (_stats)
+            // Komunikat (np. „przewijanie niedostępne”) ma pierwszeństwo przed statystykami przez czas wyświetlania.
+            if (_stats && _osd.Length == 0)
             {
                 string st = $"źródło {p.SourceInfo} · wyjście {p.VideoSize} · {p.MeasuredFps:0.0} fps · pominięte {p.Dropped}";
                 s.TextTrunc(x, y2, st, new Style(Theme.Warn, bg), ctrl.Right - x - 2);

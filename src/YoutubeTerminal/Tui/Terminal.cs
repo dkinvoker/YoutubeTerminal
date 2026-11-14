@@ -7,7 +7,7 @@ namespace YoutubeTerminal.Tui;
 /// Niskopoziomowa obsługa konsoli Windows w trybie VT: tryby wejścia/wyjścia, ekran alternatywny,
 /// bezpośredni zapis bajtów (WriteFile) chroniony blokadą — współdzielony przez UI i wątek wideo.
 /// </summary>
-internal sealed unsafe class Terminal : IDisposable
+internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
 {
     private readonly IntPtr _in;
     private readonly IntPtr _out;

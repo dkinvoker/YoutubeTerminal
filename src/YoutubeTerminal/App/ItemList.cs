@@ -32,6 +32,8 @@ internal sealed class ItemList
     public bool AllowThumbnails = true;
 
     public YtItem? Current => Selected >= 0 && Selected < Items.Count ? Items[Selected] : null;
+    /// <summary>Kiedy zmieniło się zaznaczenie.</summary>
+    public DateTime SelectedAt => _selChanged;
     public bool SelectionStable => (DateTime.UtcNow - _selChanged).TotalMilliseconds > 140;
     public bool SelectionJustSettled
     {

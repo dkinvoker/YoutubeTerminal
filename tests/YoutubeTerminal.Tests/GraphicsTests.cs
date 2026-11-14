@@ -114,7 +114,7 @@ public class GraphicsTests
         return dst;
     }
 
-    [Fact(Skip = "Znany błąd: współczynnik 1,164 i obcinanie (>>10) zamiast zaokrąglania dają biel 254 zamiast 255.")]
+    [Fact]
     public void Nv12_WhiteIsExactlyWhite()
     {
         Assert.All(Nv12(235, 128, 128), p => Assert.Equal(0xFFFFFFFFu, p));

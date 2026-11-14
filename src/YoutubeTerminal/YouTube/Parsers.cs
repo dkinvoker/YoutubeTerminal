@@ -275,7 +275,9 @@ internal static partial class Parsers
                 Thumbnail = images.Count > 0 ? images[0].BestThumb(360) : "",
                 IsMix = id.StartsWith("RD", StringComparison.Ordinal),
             };
-            if (p.ChannelName is "YouTube") p.ChannelName = rows.Count > 0 && rows[0].Count > 1 ? rows[0][0] : p.ChannelName;
+            // Składanki: w miejscu autora jest „YouTube”, a plakietka to etykieta („Składanka”), nie liczba filmów.
+            if (p.IsMix && p.ChannelName == "YouTube") p.ChannelName = "";
+            if (!p.VideoCountText.Any(char.IsDigit)) p.VideoCountText = "";
             return p;
         }
 
@@ -402,6 +404,8 @@ internal static partial class Parsers
                 foreach (var part in row.Arr("metadataParts"))
                 {
                     var t = part.Text("text");
+                    // Nowy układ: autor w avatarStackViewModel z tekstem „autor: Nazwa” / „by Name”.
+                    if (t.Length == 0 && part.Find("avatarStackViewModel") is { } stack) t = StripAuthorPrefix(stack.Text("text"));
                     if (t.Length > 0) parts.Add(t);
                     if (p.ChannelId.Length == 0 && part.Find("browseId").Str() is { Length: > 0 } bid && bid.StartsWith("UC", StringComparison.Ordinal))
                     {
@@ -422,6 +426,15 @@ internal static partial class Parsers
         CollectItems(contents, page.Content);
         if (page.Content.Items.FirstOrDefault() is VideoItem first) p.FirstVideoId = first.Id;
         return page;
+    }
+
+    /// <summary>„autor: Nazwa” / „by Name” → „Nazwa”.</summary>
+    internal static string StripAuthorPrefix(string text)
+    {
+        text = text.Trim();
+        if (text.StartsWith("by ", StringComparison.OrdinalIgnoreCase)) return text[3..].Trim();
+        int colon = text.IndexOf(": ", StringComparison.Ordinal);
+        return colon > 0 && colon < 20 ? text[(colon + 2)..].Trim() : text;
     }
 
     // --------------- Szczegóły filmu (/next) ---------------

@@ -40,6 +40,7 @@ internal sealed class VideoView : View
     }
 
     public override string Title => TextUtil.Truncate(_video.Title.Length > 0 ? _video.Title : "Film", 40);
+    public override ItemList? FocusedList => _tab == 3 ? _related : null;
 
     private void Load()
     {
@@ -54,21 +55,31 @@ internal sealed class VideoView : View
             _video = v;
             _related.SetItems(d.Related.Items, d.Related.Continuation);
             if (d.Chapters.Count == 0 && _tab == 1) _tab = 0;
-            Prefetch();
+            // Komentarze pobieramy od razu w tle — zakładka jest gotowa, zanim się na nią wejdzie.
+            if (d.CommentsToken != null && !_commentsLoaded && !_commentsLoading) LoadComments(true);
+            PrefetchStream();
         }, ex => _error = ex.Message);
     }
 
-    /// <summary>Wstępne pobranie informacji o strumieniu (yt-dlp działa kilka sekund).</summary>
-    private void Prefetch()
+    /// <summary>
+    /// Wstępne pobranie adresów strumieni (yt-dlp działa kilka sekund). Przy okazji uzupełnia
+    /// czas trwania, którego nie ma w odpowiedzi YouTube dla strony filmu (np. film otwarty z linku).
+    /// </summary>
+    private void PrefetchStream()
     {
-        if (_video.IsLive || _video.IsUpcoming || YtDlp.FindExecutable() == null) return;
-        var opts = App.CreatePlayerOptions();
-        int h = opts.MaxHeight > 0 ? opts.MaxHeight : PlayerView.AutoHeightFor(App.Term);
-        var id = _video.Id;
-        _ = Task.Run(async () =>
+        if (_video.IsUpcoming || YtDlp.FindExecutable() == null) return;
+        var video = _video;
+        Prefetch.Start(video);
+        if (video.DurationSeconds > 0 || video.IsLive) return;
+        int height = App.StreamHeight();
+        App.RunAsync(ct => YtDlp.ResolveAsync(video.Id, height, false, ct), info =>
         {
-            try { await YtDlp.ResolveAsync(id, h, false, CancellationToken.None); } catch { }
-        });
+            if (info.Duration > 0 && video.DurationSeconds == 0)
+            {
+                video.DurationSeconds = (int)Math.Round(info.Duration);
+                video.DurationText = TextUtil.FormatSeconds(video.DurationSeconds);
+            }
+        }, _ => { }, quiet: true);
     }
 
     private void LoadComments(bool reset)

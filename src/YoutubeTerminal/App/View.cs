@@ -23,6 +23,9 @@ internal abstract class View
     /// <summary>Wywoływane cyklicznie (~10–20×/s). Zwraca true, gdy trzeba przerysować.</summary>
     public virtual bool Tick() => false;
     public virtual IEnumerable<(string Key, string Label)> Hints => [];
+
+    /// <summary>Lista, na której jest teraz fokus (do pobierania strumieni z wyprzedzeniem).</summary>
+    public virtual ItemList? FocusedList => null;
 }
 
 /// <summary>Okno modalne (np. potwierdzenie, pomoc).</summary>

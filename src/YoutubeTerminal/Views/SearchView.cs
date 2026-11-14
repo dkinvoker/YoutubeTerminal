@@ -36,6 +36,7 @@ internal sealed class SearchView : View
     }
 
     public override string Title => _lastQuery.Length > 0 ? $"„{_lastQuery}”" : "Szukaj";
+    public override ItemList? FocusedList => _inputFocused ? null : _list;
     public override bool CapturesText => _inputFocused;
 
     public void FocusInput()

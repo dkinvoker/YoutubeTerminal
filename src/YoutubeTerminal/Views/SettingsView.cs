@@ -166,6 +166,7 @@ internal sealed class SettingsView : View
 
         var info = new List<string>
         {
+            $"Wersja: {AppInfo.Title}",
             $"Terminal: {App.Term.Width}×{App.Term.Height} komórek, komórka {App.CellWidth}×{App.CellHeight} px{(App.Term.CellSizeFromTerminal ? " (zgłoszona przez terminal)" : " (domyślna)")}, Sixel: {(App.SixelAvailable ? "tak" : "nie")}",
             $"Dane aplikacji: {AppPaths.Root}",
             $"Deinstalator: {Path.Combine(Path.GetDirectoryName(AppPaths.ExePath) ?? "", Installer.UninstallerName)}",

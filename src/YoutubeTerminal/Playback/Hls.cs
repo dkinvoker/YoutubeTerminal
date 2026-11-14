@@ -151,7 +151,7 @@ internal abstract class HlsSourceBase : IMediaSource
             {
                 var (ns, nu) = pending.Peek();
                 prefetchSeq = ns;
-                prefetch = HttpRangeReader.Shared.GetByteArrayAsync(nu, ct);
+                prefetch = HttpRangeReader.Observed(HttpRangeReader.Shared.GetByteArrayAsync(nu, ct));
             }
 
             foreach (var sample in ParseSegment(data))
