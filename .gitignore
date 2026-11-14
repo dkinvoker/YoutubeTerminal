@@ -4,6 +4,9 @@ obj/
 dist/
 publish/
 *.pdb
+TestResults/
+*.trx
+coverage*.xml
 
 # --- IDE / edytory ---
 .vs/

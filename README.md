@@ -164,6 +164,12 @@ build.cmd
 
 Wynik: `dist\YoutubeTerminal.exe`.
 
+Testy jednostkowe (xUnit, bez dostępu do internetu: strumienie MP4/HLS serwuje lokalny serwer testowy):
+
+```bash
+dotnet test tests\YoutubeTerminal.Tests
+```
+
 Polecenia diagnostyczne (bez TUI):
 
 - `--diag-yt "fraza"`: test API;

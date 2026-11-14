@@ -38,6 +38,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Testy jednostkowe mają dostęp do klas wewnętrznych -->
+    <InternalsVisibleTo Include="YoutubeTerminal.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Deinstalator wypakowywany obok .exe przy pierwszym uruchomieniu -->
     <EmbeddedResource Include="Resources\odinstaluj.cmd" LogicalName="odinstaluj.cmd" />
     <!-- yt-dlp wbudowany w plik wykonywalny (jeśli został umieszczony w folderze tools) -->
