@@ -1,0 +1,27 @@
+# --- Wyniki budowania .NET ---
+bin/
+obj/
+dist/
+publish/
+*.pdb
+
+# --- IDE / edytory ---
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.DotSettings.user
+
+# --- Binarka yt-dlp ---
+# build.cmd wbudowuje tools/yt-dlp.exe w program, ale samego pliku (ok. 23 MB) nie trzymamy w repozytorium.
+# Pobierz go z https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe do folderu tools/.
+tools/*.exe
+tools/*.zip
+
+# --- Różne ---
+*.log
+*.tmp
+Thumbs.db
+desktop.ini

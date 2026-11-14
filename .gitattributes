@@ -1,0 +1,11 @@
+# Domyślnie normalizacja końców linii
+* text=auto
+
+# Skrypty wsadowe Windows muszą mieć CRLF (cmd.exe źle obsługuje etykiety przy samym LF)
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Pliki binarne
+*.exe binary
+*.png binary
+*.jpg binary

@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>YoutubeTerminal</RootNamespace>
+    <AssemblyName>YoutubeTerminal</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>YouTube Terminal</Product>
+    <Description>Przeglądarka YouTube w terminalu z odtwarzaniem wideo przez Sixel</Description>
+
+    <!-- Native AOT: jeden natywny plik .exe bez zależności od środowiska .NET -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <StackTraceSupport>true</StackTraceSupport>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <TieredPGO>true</TieredPGO>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <!-- Przy publikacji nie generujemy .pdb, żeby w folderze wyjściowym był tylko .exe -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Deinstalator wypakowywany obok .exe przy pierwszym uruchomieniu -->
+    <EmbeddedResource Include="Resources\odinstaluj.cmd" LogicalName="odinstaluj.cmd" />
+    <!-- yt-dlp wbudowany w plik wykonywalny (jeśli został umieszczony w folderze tools) -->
+    <EmbeddedResource Include="..\..\tools\yt-dlp.exe" LogicalName="yt-dlp.exe" Condition="Exists('..\..\tools\yt-dlp.exe')" />
+  </ItemGroup>
+
+</Project>
