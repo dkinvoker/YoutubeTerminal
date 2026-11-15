@@ -37,6 +37,7 @@ internal sealed class PlayerView : View
     }
 
     public override bool FullScreen => true;
+    public Player? Player => _player;
     public override string Title => L.T("Odtwarzacz", "Player");
 
     public static int AutoHeightFor(Terminal t)
@@ -162,6 +163,12 @@ internal sealed class PlayerView : View
             redraw = true;
         }
         if (_osd.Length > 0 && now > _osdUntil) { _osd = ""; redraw = true; }
+        if (_player?.AudioProblem is { } problem)
+        {
+            _player.AudioProblem = null;
+            App.ShowError("🔇 " + problem, 10);
+            redraw = true;
+        }
         if ((now - _lastSave).TotalSeconds > 15 && _player?.State == PlayerState.Playing)
         {
             _lastSave = now;

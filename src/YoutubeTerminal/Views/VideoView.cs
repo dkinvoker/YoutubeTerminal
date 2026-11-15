@@ -30,9 +30,13 @@ internal sealed class VideoView : View
 
     private static string[] TabNames => [L.T("Opis", "Description"), L.T("Rozdziały", "Chapters"), L.T("Komentarze", "Comments"), L.T("Podobne", "Related")];
 
-    public VideoView(VideoItem v)
+    /// <summary>Czas z linku (np. ?t=95) — pierwsze odtworzenie zaczyna się od tego miejsca.</summary>
+    private TimeSpan? _linkStart;
+
+    public VideoView(VideoItem v, double startSeconds = 0)
     {
         _video = v;
+        if (startSeconds > 0) _linkStart = TimeSpan.FromSeconds(startSeconds);
         _related.LoadMore = (t, ct) => App.YT.NextContinuationAsync(t, ct);
         _related.EmptyText = L.T("Brak podobnych filmów.", "No related videos.");
         _related.AllowThumbnails = true;
@@ -163,6 +167,8 @@ internal sealed class VideoView : View
     {
         var queue = _related.Items.OfType<VideoItem>().Where(v => !v.IsLive && !v.IsUpcoming && !v.IsShort).ToList();
         queue.Insert(0, _video);
+        start ??= _linkStart;
+        _linkStart = null;
         App.Play(_video, queue, 0, start, audioOnly);
     }
 

@@ -32,6 +32,15 @@ internal sealed class ImageService
 
     public void ClearEncoded() => _encoded.Clear();
 
+    /// <summary>Zdekodowany obraz dla umieszczenia z <see cref="Get"/> (do zrzutów ekranu); cover = przycięty do obszaru.</summary>
+    public (Bitmap Bitmap, bool Cover)? BitmapFor(ImagePlacement placement)
+    {
+        if (placement.Key is not string key) return null;
+        var parts = key.Split('|');
+        if (parts.Length < 2 || !_bitmaps.TryGet(parts[0], out var bmp) || bmp == null) return null;
+        return (bmp, parts[^1] == bool.TrueString);
+    }
+
     /// <summary>
     /// Zwraca umieszczenie obrazu w obszarze lub null (obraz jeszcze się ładuje — wtedy po załadowaniu
     /// zostanie wywołane odświeżenie). <paramref name="fallbackUrl"/> używany, gdy pierwszy adres nie istnieje.

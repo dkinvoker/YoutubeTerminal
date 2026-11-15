@@ -7,12 +7,12 @@ rem  Deinstalator YouTube Terminal
 rem  Usuwa program, wypakowany yt-dlp (wraz z jego cache i plikami tymczasowymi),
 rem  ustawienia oraz bibliotekę (subskrypcje, historia) — opcjonalnie je zachowuje.
 rem
-rem  Użycie:  odinstaluj.cmd          — tryb interaktywny
-rem           odinstaluj.cmd /q       — bez pytań, usuwa wszystko
-rem           odinstaluj.cmd /keep    — bez pytań, zachowuje subskrypcje, historię i ustawienia
+rem  Użycie:  uninstall.cmd          — tryb interaktywny
+rem           uninstall.cmd /q       — bez pytań, usuwa wszystko
+rem           uninstall.cmd /keep    — bez pytań, zachowuje subskrypcje, historię i ustawienia
 
 set "APPDIR=%~dp0"
-set "EXE=%APPDIR%YoutubeTerminal.exe"
+set "EXE=%APPDIR%__EXE_NAME__"
 set "DATA=%LOCALAPPDATA%\YoutubeTerminal"
 set "QUIET=0"
 set "KEEP=0"

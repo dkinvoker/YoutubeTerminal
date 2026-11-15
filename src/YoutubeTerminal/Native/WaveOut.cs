@@ -6,7 +6,7 @@ namespace YoutubeTerminal.Native;
 /// Wyjście audio przez WinMM waveOut (dostępne w każdym Windows). Bufory w pamięci niezarządzanej,
 /// pozycja odtwarzania (zegar A/V) z waveOutGetPosition.
 /// </summary>
-internal sealed unsafe partial class WaveOut : IDisposable
+internal sealed unsafe partial class WaveOut : Playback.IAudioOutput
 {
     [StructLayout(LayoutKind.Sequential, Pack = 2)]
     private struct WAVEFORMATEX
@@ -204,6 +204,8 @@ internal sealed unsafe partial class WaveOut : IDisposable
         }
         return true;
     }
+
+    void Playback.IAudioOutput.Write(ReadOnlySpan<byte> pcm, CancellationToken ct) => Write(pcm, 1f, ct);
 
     /// <summary>Wysyła częściowo wypełniony bufor (np. na końcu strumienia).</summary>
     public void Flush()

@@ -16,6 +16,7 @@ if not exist "%~dp0tools\yt-dlp.exe" (
 dotnet publish "%~dp0src\YoutubeTerminal\YoutubeTerminal.csproj" -c Release -r win-x64 -o "%~dp0dist" -nologo
 if errorlevel 1 exit /b 1
 
+if exist "%~dp0dist\uninstall.cmd" del /q "%~dp0dist\uninstall.cmd"
 if exist "%~dp0dist\odinstaluj.cmd" del /q "%~dp0dist\odinstaluj.cmd"
 echo.
 echo Gotowe: %~dp0dist\YoutubeTerminal.exe

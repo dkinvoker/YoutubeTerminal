@@ -34,14 +34,15 @@ internal static class YtDlp
     public static string? FindExecutable()
     {
         if (File.Exists(Installer.YtDlpPath)) return Installer.YtDlpPath;
-        string local = Path.Combine(AppPaths.ExeDirectory, "yt-dlp.exe");
+        string name = "yt-dlp" + Installer.ExeSuffix;
+        string local = Path.Combine(AppPaths.ExeDirectory, name);
         if (File.Exists(local)) return local;
         var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
         foreach (var dir in pathVar.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
             try
             {
-                string p = Path.Combine(dir.Trim('"'), "yt-dlp.exe");
+                string p = Path.Combine(dir.Trim('"'), name);
                 if (File.Exists(p)) return p;
             }
             catch { }
@@ -64,6 +65,7 @@ internal static class YtDlp
         // PyInstaller rozpakowuje się do TEMP — kierujemy go do naszego folderu, by deinstalator mógł posprzątać.
         psi.Environment["TEMP"] = AppPaths.TempDir;
         psi.Environment["TMP"] = AppPaths.TempDir;
+        psi.Environment["TMPDIR"] = AppPaths.TempDir;
         psi.Environment["PYTHONIOENCODING"] = "utf-8";
         psi.Environment["PYTHONUTF8"] = "1";
         return psi;

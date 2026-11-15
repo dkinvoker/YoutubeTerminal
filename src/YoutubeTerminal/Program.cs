@@ -34,7 +34,7 @@ if (args.Length > 0 && (args[0] is "-h" or "--help" or "/?"))
     return 0;
 }
 
-Console.OutputEncoding = Encoding.UTF8;
+if (OperatingSystem.IsWindows()) Console.OutputEncoding = Encoding.UTF8;
 Log.InstallGlobalHandlers();
 List<string> messages;
 try

@@ -30,6 +30,7 @@ internal static class Diagnostics
         var sw = Stopwatch.StartNew();
         var info = await YtDlp.ResolveAsync(id, 480, false, CancellationToken.None);
         Console.WriteLine($"yt-dlp: {sw.ElapsedMilliseconds} ms, {info.Title}, {info.Width}x{info.Height}@{info.Fps} {info.VideoCodec}/{info.AudioCodec}");
+        if (!OperatingSystem.IsWindows()) Console.WriteLine($"ffmpeg: {Ffmpeg.Find() ?? "-"}");
 
         var start = TimeSpan.FromSeconds(startSec);
         sw.Restart();
@@ -37,55 +38,54 @@ internal static class Diagnostics
         var vt = vd.Track;
         Console.WriteLine($"demux video: {sw.ElapsedMilliseconds} ms, {vt.Codec} {vt.Width}x{vt.Height} ts={vt.Timescale} frag={vd.IsFragmented} dur={vd.Duration}");
 
-        unsafe
+        var video = new Mp4Source(vd);
+        int frames = 0, samples = 0;
+        long firstTs = -1, lastTs = 0;
+        uint centre = 0, corner = 0;
+        var small = new uint[160 * 90];
+        sw.Restart();
+        using (var dec = Codecs.CreateVideo(video, 160, 90, _ => true, (ts, px) =>
         {
-            using var dec = new H264Decoder(vt.AvcConfig!, vt.Width, vt.Height);
-            var argb = new uint[vt.Width * vt.Height];
-            var small = new uint[160 * 90];
-            int frames = 0, samples = 0;
-            long firstTs = -1, lastTs = 0;
-            dec.OnFrame = (time, y, uv, stride) =>
+            Interlocked.Increment(ref frames);
+            if (firstTs < 0) firstTs = ts.Ticks;
+            lastTs = ts.Ticks;
+            if (frames == 30) { px.AsSpan(0, small.Length).CopyTo(small); centre = px[45 * 160 + 80]; corner = px[5 * 160 + 5]; }
+        }))
+        {
+            foreach (var s in video.Read(start, CancellationToken.None))
             {
-                frames++;
-                if (firstTs < 0) firstTs = time;
-                lastTs = time;
-                ColorConvert.Nv12ToArgb(y, uv, stride, dec.CropX, dec.CropY, dec.DisplayWidth, dec.DisplayHeight, argb, false);
-                if (frames == 30)
-                {
-                    fixed (uint* p = argb) Scaler.Resize(p, dec.DisplayWidth, dec.DisplayHeight, dec.DisplayWidth, small, 160, 90);
-                }
-            };
-            sw.Restart();
-            foreach (var s in vd.ReadSamples(start, CancellationToken.None))
-            {
-                long t = vt.ToTime(s.Pts).Ticks;
-                dec.Decode(new MediaSample(s.Buffer, s.Offset, s.Length, t, vt.ToTime(s.Duration).Ticks, s.IsKey));
-                samples++;
-                if (frames >= 150) break;
+                dec.Decode(s);
+                if (++samples >= 150) break;
             }
-            Console.WriteLine($"H.264: {samples} próbek -> {frames} klatek w {sw.ElapsedMilliseconds} ms; out {dec.FrameWidth}x{dec.FrameHeight} stride {dec.Stride} disp {dec.DisplayWidth}x{dec.DisplayHeight}; ts {TimeSpan.FromTicks(firstTs)}..{TimeSpan.FromTicks(lastTs)}");
-            Console.WriteLine($"   piksel środka klatki 30: 0x{small[45 * 160 + 80]:X8}, rogu: 0x{small[5 * 160 + 5]:X8}");
-            SavePpm(small, 160, 90, Path.Combine(Path.GetTempPath(), "yt_frame.ppm"));
+            dec.EndOfStream();
         }
+        Console.WriteLine($"H.264: {samples} próbek -> {frames} klatek w {sw.ElapsedMilliseconds} ms; ts {TimeSpan.FromTicks(firstTs)}..{TimeSpan.FromTicks(lastTs)}");
+        Console.WriteLine($"   piksel środka klatki 30: 0x{centre:X8}, rogu: 0x{corner:X8}");
+        SavePpm(small, 160, 90, Path.Combine(Path.GetTempPath(), "yt_frame.ppm"));
 
         sw.Restart();
         var ad = Mp4Demuxer.Open(info.AudioUrl!, "soun", CancellationToken.None);
         var at = ad.Track;
         Console.WriteLine($"demux audio: {sw.ElapsedMilliseconds} ms, {at.Codec} {at.SampleRate} Hz {at.Channels} ch asc={Convert.ToHexString(at.AudioConfig ?? [])} frag={ad.IsFragmented} dur={ad.Duration}");
-        using (var adec = new AacDecoder(at.AudioConfig, at.SampleRate, at.Channels))
+        var audio = new Mp4Source(ad);
+        long bytes = 0, first = -1;
+        int rate = 0, channels = 0, n = 0;
+        sw.Restart();
+        using (var adec = Codecs.CreateAudio(audio, (pcm, time, r, ch) =>
         {
-            long bytes = 0;
-            long first = -1;
-            adec.OnPcm = (pcm, time) => { bytes += pcm.Length; if (first < 0) first = time; };
-            sw.Restart();
-            int n = 0;
-            foreach (var s in ad.ReadSamples(start, CancellationToken.None))
+            bytes += pcm.Length;
+            if (first < 0) first = time;
+            rate = r; channels = ch;
+        }))
+        {
+            foreach (var s in audio.Read(start, CancellationToken.None))
             {
-                adec.Decode(new MediaSample(s.Buffer, s.Offset, s.Length, at.ToTime(s.Pts).Ticks, at.ToTime(s.Duration).Ticks, s.IsKey));
+                adec.Decode(s);
                 if (++n >= 500) break;
             }
-            Console.WriteLine($"AAC: {n} próbek -> {bytes} B PCM ({bytes / (double)(adec.SampleRate * adec.Channels * 2):F2} s) {adec.SampleRate} Hz {adec.Channels} ch w {sw.ElapsedMilliseconds} ms, start {TimeSpan.FromTicks(first)}");
+            adec.EndOfStream();
         }
+        Console.WriteLine($"AAC: {n} próbek -> {bytes} B PCM ({bytes / (double)Math.Max(1, rate * channels * 2):F2} s) {rate} Hz {channels} ch w {sw.ElapsedMilliseconds} ms, start {TimeSpan.FromTicks(first)}");
         return 0;
     }
 
@@ -189,7 +189,8 @@ internal static class Diagnostics
             SavePng(dec, w, h, Path.Combine(outDir, $"sixel_{name}.png"));
         }
 
-        // Klatki wideo: przepustowość enkodera na prawdziwym materiale
+        // Klatki wideo: przepustowość enkodera na prawdziwym materiale (dekoder Media Foundation — tylko Windows)
+        if (!OperatingSystem.IsWindows()) return 0;
         Installer.Run();
         var info = await YtDlp.ResolveAsync(id, 480, false, CancellationToken.None);
         var vd = Mp4Demuxer.Open(info.VideoUrl!, "vide", CancellationToken.None);

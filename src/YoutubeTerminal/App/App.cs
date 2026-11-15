@@ -86,6 +86,9 @@ internal sealed class App
                     case "dump":
                         Post(() => DumpScreen(arg));
                         break;
+                    case "svg":
+                        Post(() => ExportSvg(arg));
+                        break;
                     case "quit":
                         Post(() => _quit = true);
                         break;
@@ -107,8 +110,42 @@ internal sealed class App
         sb.AppendLine($"--- obrazy: {_screen.Images.Count}");
         foreach (var i in _screen.Images) sb.AppendLine($"  {i.Area} ext={i.External} bytes={i.Data?.Length ?? 0}");
         sb.AppendLine($"--- sixel={SixelAvailable} mode={ImageMode} cell={CellWidth}x{CellHeight} fromTerm={Term.CellSizeFromTerminal} size={Term.Width}x{Term.Height}");
+        if ((Top as PlayerView)?.Player is { } pl) sb.AppendLine($"--- player: state={pl.State} frame={(pl.LastFrame is { } lf ? $"{lf.Width}x{lf.Height}" : "-")}");
         sb.AppendLine($"--- status: {_message}");
         File.WriteAllText(path, sb.ToString());
+    }
+
+    /// <summary>Zrzut ekranu do SVG (do dokumentacji): tekst, kolory, miniatury i bieżąca klatka wideo.</summary>
+    private void ExportSvg(string path)
+    {
+        var player = (Top as PlayerView)?.Player;
+        var svg = SvgExport.Render(_screen, Theme.Bg, p =>
+        {
+            if (p.External)
+            {
+                if (player?.LastFrame is not { } f) return null;
+                if (player.Options.Mode == RenderMode.Sixel && !player.Options.Dither)
+                {
+                    // Tak jak na ekranie: paleta adaptacyjna o liczbie kolorów z ustawień.
+                    var q = new IndexedImage();
+                    new Quantizer().QuantizeAdaptive(f.Pixels, f.Width, f.Height, q, Math.Clamp(player.Options.Colors, 2, 255));
+                    for (int i = 0; i < f.Pixels.Length; i++) f.Pixels[i] = (uint)q.Palette[q.Indices[i]];
+                }
+                return (f.Pixels, f.Width, f.Height, false);
+            }
+            if (Images.BitmapFor(p) is not { } b) return null;
+            // Rozdzielczość 2× względem komórek zrzutu — ostro, ale bez wielomegabajtowych plików.
+            int pw = p.Area.W * SvgExport.CellW * 2, ph = p.Area.H * SvgExport.CellH * 2;
+            Graphics.Bitmap img;
+            if (b.Cover) img = b.Bitmap.CoverInto(pw, ph);
+            else
+            {
+                double k = Math.Min(pw / (double)b.Bitmap.Width, ph / (double)b.Bitmap.Height);
+                img = Scaler.Resize(b.Bitmap, Math.Max(1, (int)(b.Bitmap.Width * k)), Math.Max(1, (int)(b.Bitmap.Height * k)));
+            }
+            return (img.Pixels, img.Width, img.Height, b.Cover);
+        });
+        File.WriteAllText(path, svg);
     }
 
     public bool SixelAvailable { get; private set; }
@@ -151,7 +188,11 @@ internal sealed class App
         _stack.Add(search);
         search.OnShow();
         if (!string.IsNullOrWhiteSpace(InitialQuery)) search.Submit(InitialQuery);
-        if (!string.IsNullOrWhiteSpace(KeyScript)) StartKeyScript(KeyScript);
+        if (!string.IsNullOrWhiteSpace(KeyScript))
+        {
+            Player.KeepLastFrame = KeyScript.Contains("svg:", StringComparison.Ordinal);
+            StartKeyScript(KeyScript);
+        }
 
         foreach (var m in _startupMessages) ShowError(m);
         if (YtDlp.FindExecutable() == null)
@@ -565,7 +606,7 @@ internal sealed class App
         }
     }
 
-    public void OpenVideo(VideoItem v) => Push(new VideoView(v));
+    public void OpenVideo(VideoItem v, double startSeconds = 0) => Push(new VideoView(v, startSeconds));
 
     public void OpenChannel(string channelId, string? title = null)
     {

@@ -1,17 +1,15 @@
 using System.Text;
-using YoutubeTerminal.Native;
+using YoutubeTerminal.Platform;
 
 namespace YoutubeTerminal.Tui;
 
 /// <summary>
-/// Niskopoziomowa obsługa konsoli Windows w trybie VT: tryby wejścia/wyjścia, ekran alternatywny,
-/// bezpośredni zapis bajtów (WriteFile) chroniony blokadą — współdzielony przez UI i wątek wideo.
+/// Terminal w trybie VT: ekran alternatywny, mysz, wklejanie w nawiasach i bezpośredni zapis bajtów
+/// chroniony blokadą (współdzielony przez UI i wątek wideo). Część zależna od systemu jest w <see cref="IConsoleBackend"/>.
 /// </summary>
-internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
+internal sealed class Terminal : ITerminalOutput, IDisposable
 {
-    private readonly IntPtr _in;
-    private readonly IntPtr _out;
-    private uint _origIn, _origOut, _origInCp, _origOutCp;
+    private readonly IConsoleBackend _backend;
     private bool _initialized;
     private readonly object _writeLock = new();
 
@@ -26,33 +24,21 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
     public bool SyncOutputSupported { get; set; }
     public string TerminalName { get; set; } = "";
 
-    public IntPtr InputHandle => _in;
+    public IConsoleBackend Backend => _backend;
 
-    public Terminal()
-    {
-        _in = Win32Console.GetStdHandle(Win32Console.STD_INPUT_HANDLE);
-        _out = Win32Console.GetStdHandle(Win32Console.STD_OUTPUT_HANDLE);
-    }
+    public Terminal() : this(ConsoleBackend.Create()) { }
+
+    public Terminal(IConsoleBackend backend) => _backend = backend;
 
     public void Init()
     {
-        if (!Win32Console.GetConsoleMode(_out, out _origOut) || !Win32Console.GetConsoleMode(_in, out _origIn))
-            throw new InvalidOperationException(L.T("Ten program musi być uruchomiony w terminalu (np. Windows Terminal).", "This program must run in a terminal (e.g. Windows Terminal)."));
-
-        _origInCp = Win32Console.GetConsoleCP();
-        _origOutCp = Win32Console.GetConsoleOutputCP();
-        Win32Console.SetConsoleOutputCP(65001);
-        Win32Console.SetConsoleCP(65001);
-
-        uint outMode = Win32Console.ENABLE_PROCESSED_OUTPUT | Win32Console.ENABLE_VIRTUAL_TERMINAL_PROCESSING | Win32Console.DISABLE_NEWLINE_AUTO_RETURN;
-        if (!Win32Console.SetConsoleMode(_out, outMode))
-            throw new InvalidOperationException(L.T("Konsola nie obsługuje sekwencji VT. Użyj Windows Terminal.", "The console does not support VT sequences. Use Windows Terminal."));
-
-        uint inMode = Win32Console.ENABLE_VIRTUAL_TERMINAL_INPUT | Win32Console.ENABLE_WINDOW_INPUT | Win32Console.ENABLE_EXTENDED_FLAGS;
-        Win32Console.SetConsoleMode(_in, inMode);
-        Win32Console.FlushConsoleInputBuffer(_in);
+        _backend.Init();
         _initialized = true;
+        // Sprzątanie także przy zakończeniu przez SIGTERM (Linux/macOS) lub zamknięciu okna.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Dispose();
 
+        // .NET w Unix może przełączyć klawiaturę numeryczną i kursory w tryb aplikacji — wracamy do zwykłego.
+        if (!OperatingSystem.IsWindows()) WriteString("\x1b[?1l\x1b>");
         // Ekran alternatywny, ukryty kursor, bez zawijania, mysz SGR, wklejanie w nawiasach.
         WriteString("\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[?1000h\x1b[?1002h\x1b[?1006h\x1b[?2004h\x1b[2J\x1b[H");
         UpdateSize();
@@ -60,17 +46,7 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
 
     public bool UpdateSize()
     {
-        int w, h;
-        try
-        {
-            w = Console.WindowWidth;
-            h = Console.WindowHeight;
-        }
-        catch
-        {
-            return false;
-        }
-        if (w <= 0 || h <= 0) return false;
+        if (!_backend.TryGetSize(out int w, out int h)) return false;
         if (w == Width && h == Height) return false;
         Width = w;
         Height = h;
@@ -81,7 +57,7 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
     {
         lock (_writeLock)
         {
-            WriteUnlocked(data);
+            _backend.Write(data);
         }
     }
 
@@ -90,25 +66,9 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
     {
         lock (_writeLock)
         {
-            WriteUnlocked(a);
-            WriteUnlocked(b);
-            if (!c.IsEmpty) WriteUnlocked(c);
-        }
-    }
-
-    private void WriteUnlocked(ReadOnlySpan<byte> data)
-    {
-        fixed (byte* p = data)
-        {
-            int offset = 0;
-            while (offset < data.Length)
-            {
-                // Duże bloki dzielimy, żeby konsola nie odrzucała zapisów.
-                uint chunk = (uint)Math.Min(data.Length - offset, 1 << 20);
-                if (!Win32Console.WriteFile(_out, p + offset, chunk, out uint written, IntPtr.Zero) || written == 0)
-                    return;
-                offset += (int)written;
-            }
+            _backend.Write(a);
+            _backend.Write(b);
+            if (!c.IsEmpty) _backend.Write(c);
         }
     }
 
@@ -119,7 +79,7 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
         WriteString("\x1b]0;" + title.Replace('\x1b', ' ').Replace('\a', ' ') + "\a");
     }
 
-    /// <summary>Kopiowanie do schowka przez OSC 52 (obsługiwane przez Windows Terminal).</summary>
+    /// <summary>Kopiowanie do schowka przez OSC 52 (Windows Terminal, iTerm2, kitty, WezTerm, foot…).</summary>
     public void CopyToClipboard(string text)
     {
         WriteString("\x1b]52;c;" + Convert.ToBase64String(Encoding.UTF8.GetBytes(text)) + "\a");
@@ -127,16 +87,16 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
 
     public void Dispose()
     {
-        if (!_initialized) return;
-        _initialized = false;
-        try
+        lock (_writeLock)
         {
-            WriteString("\x1b[0m\x1b[2J\x1b[?2004l\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[?7h\x1b[?25h\x1b[?1049l");
+            if (!_initialized) return;
+            _initialized = false;
+            try
+            {
+                _backend.Write(Encoding.ASCII.GetBytes("\x1b[0m\x1b[2J\x1b[?2004l\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[?7h\x1b[?25h\x1b[?1049l"));
+            }
+            catch { }
+            _backend.Restore();
         }
-        catch { }
-        Win32Console.SetConsoleMode(_out, _origOut);
-        Win32Console.SetConsoleMode(_in, _origIn);
-        if (_origOutCp != 0) Win32Console.SetConsoleOutputCP(_origOutCp);
-        if (_origInCp != 0) Win32Console.SetConsoleCP(_origInCp);
     }
 }

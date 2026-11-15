@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text;
-using YoutubeTerminal.Native;
 
 namespace YoutubeTerminal.Tui;
 
@@ -311,7 +310,7 @@ internal sealed class VtParser
 }
 
 /// <summary>Wątek czytający zdarzenia konsoli i zamieniający je na zdarzenia aplikacji.</summary>
-internal sealed unsafe class InputReader : IDisposable
+internal sealed class InputReader : IDisposable
 {
     private readonly Terminal _term;
     private readonly BlockingCollection<InputEvent> _queue;
@@ -332,38 +331,14 @@ internal sealed unsafe class InputReader : IDisposable
 
     private void Run()
     {
-        var records = new Win32Console.INPUT_RECORD[128];
         var pending = new StringBuilder();
         var events = new List<InputEvent>();
-        IntPtr h = _term.InputHandle;
+        var backend = _term.Backend;
 
         while (!_stop)
         {
-            uint wait = Win32Console.WaitForSingleObject(h, pending.Length > 0 ? 40u : 200u);
-            bool timedOut = wait != Win32Console.WAIT_OBJECT_0;
-
-            if (!timedOut)
-            {
-                uint read;
-                fixed (Win32Console.INPUT_RECORD* p = records)
-                {
-                    if (!Win32Console.ReadConsoleInput(h, p, (uint)records.Length, out read)) { Thread.Sleep(10); continue; }
-                }
-                for (int i = 0; i < read; i++)
-                {
-                    ref var r = ref records[i];
-                    if (r.EventType == Win32Console.KEY_EVENT)
-                    {
-                        if (r.KeyDown == 0 || r.UnicodeChar == '\0') continue;
-                        int rep = Math.Max(1, (int)r.RepeatCount);
-                        for (int k = 0; k < rep; k++) pending.Append(r.UnicodeChar);
-                    }
-                    else if (r.EventType == Win32Console.WINDOW_BUFFER_SIZE_EVENT)
-                    {
-                        _queue.Add(new ResizeEvent());
-                    }
-                }
-            }
+            bool timedOut = !backend.Read(pending, pending.Length > 0 ? 40 : 200, out bool resized);
+            if (resized) _queue.Add(new ResizeEvent());
 
             if (pending.Length == 0)
             {

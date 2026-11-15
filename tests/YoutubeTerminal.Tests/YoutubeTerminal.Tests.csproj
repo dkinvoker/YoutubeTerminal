@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <!-- Ta sama platforma co aplikacja (projekt aplikacji ma ustawiony win-x64) -->
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Ta sama platforma co aplikacja: system, na którym uruchamiamy testy -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

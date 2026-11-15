@@ -1,204 +1,110 @@
-# YouTube Terminal
+<div align="center">
 
-Przeglądarka YouTube w terminalu (TUI) z odtwarzaniem wideo przez **Sixel**. To jeden plik
-`YoutubeTerminal.exe` skompilowany przez **.NET Native AOT**: nie wymaga zainstalowanego .NET,
-ffmpeg ani niczego innego.
+# ▶ YouTube Terminal
 
-## Funkcje
+**YouTube in your terminal — search, channels, playlists, comments and real video playback with sound.**<br>
+One self-contained file for Windows, Linux and macOS. Nothing to install.
 
-- **Wyszukiwarka** z podpowiedziami, filtrem (wszystko / filmy / kanały / playlisty), sortowaniem
-  (trafność, data, wyświetlenia, ocena), nieskończonym przewijaniem i historią wyszukiwań.
-  Można też wkleić link do filmu, Shorts, kanału, `@uchwytu` lub playlisty.
-- **Kanały**: nagłówek z awatarem, zakładki (Filmy, Shorts, Na żywo, Playlisty…), sortowanie
-  (najnowsze / popularne / najstarsze), subskrypcje.
-- **Playlisty i składanki**: odtwarzanie całości, od wybranego filmu lub losowo.
-- **Szczegóły filmu**: miniatura, statystyki, opis, rozdziały, komentarze (z odpowiedziami
-  i sortowaniem) oraz podobne filmy.
-- **Odtwarzacz**: obraz Sixel (albo półbloki `▀` w terminalach bez Sixel) zsynchronizowany z dźwiękiem.
-  - pauza, przewijanie, skoki procentowe, rozdziały;
-  - głośność i wyciszanie, tryb pełnoekranowy, tryb „tylko dźwięk”;
-  - kolejka i autoodtwarzanie, wznawianie od miejsca przerwania;
-  - **transmisje na żywo**.
-- **Biblioteka lokalna**: subskrypcje (z kanałem „najnowsze filmy” zbieranym z RSS), historia
-  z postępem oglądania oraz lista „Do obejrzenia”.
-- Miniatury Sixel na listach i w panelu podglądu, obsługa myszy (kółko, kliknięcia, pasek postępu).
+[![Build](https://github.com/dkinvoker/YoutubeTerminal/actions/workflows/build.yml/badge.svg)](https://github.com/dkinvoker/YoutubeTerminal/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/dkinvoker/YoutubeTerminal?label=download)](https://github.com/dkinvoker/YoutubeTerminal/releases/latest)
 
-## Wymagania
+<img src="docs/images/player.svg" alt="Big Buck Bunny playing inside a terminal window as Sixel graphics" width="100%">
 
-- Windows 10/11 x64.
-- Do grafiki Sixel: **Windows Terminal 1.22 lub nowszy**. W innych terminalach program przełącza się
-  na tryb półbloków.
+</div>
 
-## Uruchomienie
+## Features
 
-```bash
-YoutubeTerminal.exe
-```
+- 🔎 **Search** with suggestions, filters (videos, channels, playlists) and sorting — or just paste any YouTube link.
+- 📺 **Channels, playlists and mixes**, plus video pages with description, chapters, comments and related videos.
+- ▶️ **Video playback right in the terminal**, in sync with the sound: full Sixel graphics, Unicode octants or colored half blocks.
+- 🔴 **Live streams**, autoplay, a play queue and resume where you left off.
+- ⭐ **Your library, stored locally:** subscriptions with a "latest videos" feed, watch history and Watch later.
+- ⌨️ **Keyboard first**, with mouse support for scrolling, clicking and seeking.
+- 🌍 **English and Polish** interface.
+- 📦 **A single executable.** No .NET, Python or ffmpeg to set up, and a one-click uninstaller that leaves nothing behind.
 
-Program przyjmuje też frazę albo link w linii poleceń:
+<div align="center">
+<img src="docs/images/search.svg" alt="Search results with thumbnails and a preview panel" width="100%">
+</div>
 
-```bash
-YoutubeTerminal.exe "lofi hip hop"
-```
+## Download
 
-```bash
-YoutubeTerminal.exe https://youtu.be/aqz-KE-bpKQ
-```
+Grab the file for your system from the [latest release](https://github.com/dkinvoker/YoutubeTerminal/releases/latest):
 
-Przy pierwszym uruchomieniu program:
-
-- wypakowuje wbudowany `yt-dlp.exe` do `%LOCALAPPDATA%\YoutubeTerminal\bin`;
-- tworzy obok siebie deinstalator `odinstaluj.cmd`.
-
-## Klawisze
-
-| Ogólne | |
-|---|---|
-| `1`–`5` | Szukaj · Subskrypcje · Historia · Do obejrzenia · Ustawienia |
-| `/` | wyszukiwarka |
-| `Esc` / `Backspace` / `q` | wstecz (`q` na ekranie głównym zamyka program) |
-| `F1` / `?` | pomoc |
-| `Ctrl+C` | wyjście |
-
-| Listy | |
-|---|---|
-| `↑↓ PgUp PgDn Home End` | nawigacja |
-| `Enter` | otwórz |
-| `p` / `Spacja` | odtwórz |
-| `a` | tylko dźwięk |
-| `c` | kanał |
-| `s` | subskrybuj |
-| `w` | do obejrzenia |
-| `y` | kopiuj link |
-| `o` | przeglądarka |
-| `Tab` / `Shift+Tab` | filtr lub zakładki / sortowanie |
-
-| Odtwarzacz | |
-|---|---|
-| `Spacja` / `k` | pauza |
-| `← →` | ±5 s |
-| `j l` | ±10 s |
-| `PgUp PgDn` | ±60 s |
-| `0`–`9` | skok do 0–90% |
-| `↑ ↓` / `+ -` | głośność |
-| `m` | wycisz |
-| `, .` | rozdziały |
-| `n N` | następny / poprzedni z kolejki |
-| `f` | pełny ekran |
-| `v` | Sixel ↔ półbloki |
-| `d` | paleta adaptacyjna ↔ dithering |
-| `[ ]` | rozmiar obrazu |
-| `a` | tylko dźwięk |
-| `i` | statystyki |
-| `End` | na żywo: powrót do bieżącego momentu |
-
-## Ustawienia i wydajność
-
-Ustawienia (klawisz `5`) zapisują się w `%LOCALAPPDATA%\YoutubeTerminal\settings.json`. Jeśli obraz się
-zacina, zmniejsz kolejno:
-
-- **maks. szerokość obrazu wideo** (domyślnie 960 px);
-- **kolory w klatce wideo** (domyślnie 128);
-- **limit FPS**.
-
-Tylko zmienione fragmenty klatki są wysyłane do terminala, więc statyczne sceny (podcasty, streamy
-lofi) zużywają niewiele przepustowości.
-
-Gdy obrazy mają złe proporcje albo nachodzą na tekst, ustaw ręcznie **rozmiar komórki**. Windows Terminal
-używa dla Sixel wirtualnej komórki 10×20 px.
-
-Gdy YouTube coś zmieni i odtwarzanie przestanie działać, zaktualizuj yt-dlp z poziomu Ustawień
-(pozycja „yt-dlp”, Enter).
-
-## Jak to działa
-
-| Warstwa | Implementacja |
-|---|---|
-| Dane YouTube | publiczne API strony (InnerTube, klient WEB) i kanały RSS. Parser przechodzi drzewo JSON i rozpoznaje znane renderery, więc drobne zmiany układu nie psują aplikacji. |
-| Adresy strumieni | wbudowany yt-dlp, wybierający H.264 + AAC. |
-| Pobieranie | własny klient HTTP z żądaniami `Range` (pobieranie całego pliku jednym żądaniem YouTube mocno dławi). |
-| Demultipleksacja | własny demuxer MP4 (DASH: `sidx`/`moof`/`trun` oraz klasyczne tablice próbek) i HLS (MPEG-TS + packed AAC) dla transmisji na żywo. |
-| Dekodowanie | systemowe dekodery Windows Media Foundation (H.264 MFT, AAC MFT) wywoływane przez tablice wirtualne COM (zgodne z AOT). |
-| Obraz | NV12 → RGB, skalowanie, kwantyzacja median-cut, enkoder Sixel (równoległy, paskami) lub półbloki z kolorem 24-bit. |
-| Dźwięk | WinMM `waveOut`. Pozycja odtwarzania audio jest zegarem synchronizacji A/V. |
-| TUI | własny renderer różnicowy z obsługą obrazów: komórki pod Sixelem nie są nadpisywane tekstem, a klatki wideo zapisuje osobny wątek. |
-
-## Pliki i deinstalacja
-
-Wszystko, co program tworzy, trafia do `%LOCALAPPDATA%\YoutubeTerminal`:
-
-- `bin\yt-dlp.exe`;
-- `cache\yt-dlp`;
-- `tmp` (pliki tymczasowe yt-dlp, kierowane tu zamiast do `%TEMP%`);
-- `settings.json`, `library.json`, `log.txt`.
-
-Deinstalator `odinstaluj.cmd` (obok `.exe`) usuwa ten folder, program i samego siebie. Opcjonalnie
-zachowuje subskrypcje, historię i ustawienia.
-
-```bash
-odinstaluj.cmd
-```
-
-Bez pytań, z usunięciem wszystkiego:
-
-```bash
-odinstaluj.cmd /q
-```
-
-Bez pytań, z zachowaniem biblioteki i ustawień:
-
-```bash
-odinstaluj.cmd /keep
-```
-
-## Budowanie
-
-Wymagane są .NET SDK 10 oraz Visual Studio Build Tools z obciążeniem C++ (linker MSVC dla Native AOT).
-Plik `tools\yt-dlp.exe` jest wbudowywany w program. Nie ma go w repozytorium (`.gitignore`), więc przed
-budowaniem pobierz go z [wydań yt-dlp](https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe)
-do folderu `tools`.
-
-```bash
-build.cmd
-```
-
-Wynik: `dist\YoutubeTerminal.exe`.
-
-Testy jednostkowe (xUnit, bez dostępu do internetu: strumienie MP4/HLS serwuje lokalny serwer testowy):
-
-```bash
-dotnet test tests\YoutubeTerminal.Tests
-```
-
-## Wersje i wydania
-
-Numer wersji (`YoutubeTerminal.exe --version`) i wydania na GitHubie powstają automatycznie, na
-podstawie opisów commitów w formacie [Conventional Commits](https://www.conventionalcommits.org/pl/v1.0.0/):
-
-| Początek opisu commita | Skutek |
+| System | File |
 | --- | --- |
-| `fix: …` | wersja poprawkowa, np. 1.0.0 → 1.0.1 |
-| `feat: …` | nowa funkcja, np. 1.0.1 → 1.1.0 |
-| `feat!: …` albo `BREAKING CHANGE:` w treści | wersja główna, np. 1.1.0 → 2.0.0 |
-| `perf:`, `docs:`, `test:`, `refactor:`, `ci:`, `chore:` | bez nowej wersji (`perf:` trafia do listy zmian) |
+| Windows 10 / 11 (x64) | [`YoutubeTerminal-win-x64.exe`](https://github.com/dkinvoker/YoutubeTerminal/releases/latest/download/YoutubeTerminal-win-x64.exe) |
+| Linux (x64) | [`YoutubeTerminal-linux-x64.tar.gz`](https://github.com/dkinvoker/YoutubeTerminal/releases/latest/download/YoutubeTerminal-linux-x64.tar.gz) |
+| Linux (ARM64) | [`YoutubeTerminal-linux-arm64.tar.gz`](https://github.com/dkinvoker/YoutubeTerminal/releases/latest/download/YoutubeTerminal-linux-arm64.tar.gz) |
+| macOS (Apple Silicon) | [`YoutubeTerminal-macos-arm64.tar.gz`](https://github.com/dkinvoker/YoutubeTerminal/releases/latest/download/YoutubeTerminal-macos-arm64.tar.gz) |
 
-Przebieg:
+**Windows:** run the `.exe` in [Windows Terminal](https://aka.ms/terminal).
 
-1. Push na `main` uruchamia testy (workflow **CI**) oraz release-please (workflow **Release**).
-2. release-please otwiera lub aktualizuje pull request „chore(main): release X.Y.Z” z nową wersją
-   w `YoutubeTerminal.csproj` i wpisami w `CHANGELOG.md`.
-3. Scalenie tego PR tworzy tag `vX.Y.Z` i wydanie na GitHubie. Workflow pobiera wtedy oficjalny
-   yt-dlp (ze sprawdzeniem sumy SHA-256), uruchamia testy i buduje `YoutubeTerminal.exe` (Native AOT),
-   a potem dołącza go do wydania razem z plikiem `.sha256`.
+**Linux and macOS:** unpack and run it from your terminal.
 
-Pliki istniejącego wydania można przebudować ręcznie: **Actions → Release → Run workflow** z podanym tagiem.
+```bash
+tar -xzf YoutubeTerminal-linux-x64.tar.gz
+```
 
-Jednorazowo w ustawieniach repozytorium na GitHubie trzeba zaznaczyć:
-**Settings → Actions → General → Workflow permissions → „Allow GitHub Actions to create and approve pull requests”**
-(inaczej release-please nie otworzy PR wydania).
+```bash
+./YoutubeTerminal
+```
 
-Polecenia diagnostyczne (bez TUI):
+On macOS, a file downloaded with a browser may be blocked as coming from an unidentified developer. To allow it:
 
-- `--diag-yt "fraza"`: test API;
-- `--diag-decode <id>`: test dekodowania;
-- `--diag-sixel <id> <folder>`: test enkodera Sixel z zapisem PNG.
+```bash
+xattr -d com.apple.quarantine YoutubeTerminal
+```
+
+You can also start straight from a search or a link:
+
+```bash
+./YoutubeTerminal "lofi hip hop"
+```
+
+## Best terminals
+
+| Picture | Terminals |
+| --- | --- |
+| **Sixel** (full graphics) | Windows Terminal 1.22+, WezTerm, foot, Konsole, iTerm2, xterm (`-ti vt340`), mlterm |
+| **Octants** (2×4 pixels per cell) | Windows Terminal 1.25+, or any terminal and font with Unicode 16 octant glyphs |
+| **Half blocks** | Any terminal with 24-bit color |
+
+The app picks Sixel automatically when your terminal supports it. Press `v` during playback to switch modes,
+or choose one in **Settings** (`5`). If playback stutters, try octants or lower the video size in Settings.
+
+## Keys
+
+| Key | Action |
+| --- | --- |
+| `1`–`5` | Search · Subscriptions · History · Watch later · Settings |
+| `Enter` / `p` | Open / play |
+| `a` | Play audio only |
+| `c` · `s` · `w` | Go to channel · subscribe · add to Watch later |
+| `Space` | Pause |
+| `← →` · `j l` | Seek 5 s · 10 s |
+| `↑ ↓` · `m` | Volume · mute |
+| `v` · `f` | Picture mode · full screen |
+| `Esc` / `q` | Back |
+| `F1` | All shortcuts |
+
+## Uninstall
+
+The first run puts an uninstaller next to the program: `uninstall.cmd` on Windows, `uninstall.sh` on Linux and macOS.
+It removes the program, its data, the bundled tools and itself. You can choose to keep your subscriptions and history.
+
+## Under the hood
+
+YouTube Terminal is written in C# and compiled with .NET Native AOT into a single native executable.
+It uses the bundled [yt-dlp](https://github.com/yt-dlp/yt-dlp) to find video streams and decodes them with
+Media Foundation on Windows or [FFmpeg](https://ffmpeg.org) on Linux and macOS (your system's copy, or a small bundled one).
+The terminal UI, the Sixel and octant encoders and the video player are written from scratch.
+
+Building from source, settings, file locations and the release process are described in the
+[technical documentation](docs/dokumentacja.md) (in Polish).
+
+## Credits
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (Unlicense), [FFmpeg](https://ffmpeg.org) (LGPL 2.1+, Linux and macOS builds), [StbImageSharp](https://github.com/StbSharp/StbImageSharp).
+- Screenshots show *Big Buck Bunny* and other [Blender Studio](https://studio.blender.org) open movies (CC BY).
+- This project is not affiliated with YouTube or Google.

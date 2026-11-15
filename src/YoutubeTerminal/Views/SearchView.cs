@@ -124,7 +124,7 @@ internal sealed class SearchView : View
                 switch (r.Kind)
                 {
                     case "video":
-                        App.OpenVideo(new VideoItem { Id = r.Id });
+                        App.OpenVideo(new VideoItem { Id = r.Id }, r.StartSeconds);
                         if (r.StartSeconds > 0) App.ShowMessage(L.T($"Link wskazuje {TextUtil.FormatSeconds(r.StartSeconds)} — użyj p, aby odtworzyć.", $"The link points to {TextUtil.FormatSeconds(r.StartSeconds)} — press p to play from there."));
                         break;
                     case "channel": App.OpenChannel(r.Id); break;

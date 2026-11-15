@@ -1,0 +1,194 @@
+# Każdy push i pull request: testy oraz pliki wykonywalne (Native AOT) dla Windows, Linuksa i macOS.
+# Push na main: gdy od ostatniego wydania są commity feat:/fix:/perf: (lub zmiany łamiące zgodność),
+# powstaje automatycznie nowy tag vX.Y.Z i wydanie na GitHubie z plikami do pobrania.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Wydanie: auto (wg commitów), patch / minor / major (wymuś), none (bez wydania)"
+        type: choice
+        options: [auto, patch, minor, major, none]
+        default: auto
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  FFMPEG_VERSION: "7.1.1"
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
+      release: ${{ steps.next.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Następna wersja (Conventional Commits)
+        id: next
+        run: |
+          bash .github/scripts/next-version.sh "${{ github.event.inputs.release || 'auto' }}" release-notes.md | tee -a "$GITHUB_OUTPUT"
+          echo "--- release-notes.md"
+          cat release-notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  build:
+    needs: version
+    name: build (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            ytdlp: yt-dlp.exe
+            asset: YoutubeTerminal-win-x64.exe
+          - rid: linux-x64
+            os: ubuntu-22.04        # starszy glibc = działa na większej liczbie dystrybucji
+            ytdlp: yt-dlp_linux
+            asset: YoutubeTerminal-linux-x64.tar.gz
+            ffmpeg: true
+          - rid: linux-arm64
+            os: ubuntu-22.04-arm
+            ytdlp: yt-dlp_linux_aarch64
+            asset: YoutubeTerminal-linux-arm64.tar.gz
+            ffmpeg: true
+          - rid: osx-arm64
+            os: macos-latest
+            ytdlp: yt-dlp_macos
+            asset: YoutubeTerminal-macos-arm64.tar.gz
+            ffmpeg: true
+    env:
+      RID: ${{ matrix.rid }}
+      VERSION: ${{ needs.version.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Narzędzia systemowe (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          # clang + zlib: Native AOT; nasm: szybki ffmpeg na x64; ffmpeg z libx264: klip do testu integracyjnego
+          sudo apt-get install -y -q clang zlib1g-dev nasm ffmpeg
+
+      - name: yt-dlp (oficjalne wydanie, ze sprawdzeniem SHA-256)
+        run: |
+          out="tools/$RID/yt-dlp"
+          [ "$RID" = "win-x64" ] && out="$out.exe"
+          bash .github/scripts/fetch-yt-dlp.sh "${{ matrix.ytdlp }}" "$out"
+
+      - name: Cache minimalnego ffmpeg
+        if: matrix.ffmpeg
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: tools/${{ matrix.rid }}/ffmpeg
+          key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ matrix.rid }}-${{ hashFiles('.github/scripts/build-ffmpeg.sh') }}
+
+      - name: Minimalny ffmpeg (wbudowywany w program)
+        if: matrix.ffmpeg && steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: bash .github/scripts/build-ffmpeg.sh "tools/$RID/ffmpeg"
+
+      - name: Testy
+        env:
+          # Linux: test dekodowania przez ffmpeg jest obowiązkowy i sprawdza też wbudowaną (minimalną) kopię.
+          YTT_REQUIRE_FFMPEG: ${{ runner.os == 'Linux' && '1' || '' }}
+          YTT_TEST_DECODER_FFMPEG: ${{ matrix.ffmpeg && format('{0}/tools/{1}/ffmpeg', github.workspace, matrix.rid) || '' }}
+        run: dotnet test tests/YoutubeTerminal.Tests -c Release --logger "trx;LogFileName=tests-$RID.trx" --results-directory TestResults
+
+      - name: Wyniki testów
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.rid }}
+          path: TestResults
+
+      - name: Native AOT
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # Kompilator AOT szuka linkera MSVC przez vswhere.exe
+            export PATH="/c/Program Files (x86)/Microsoft Visual Studio/Installer:$PATH"
+          fi
+          dotnet publish src/YoutubeTerminal/YoutubeTerminal.csproj -c Release -r "$RID" -p:Version="$VERSION" -o dist
+          rm -f dist/uninstall.*
+          ls -l dist
+
+      - name: Sprawdzenie pliku wykonywalnego
+        run: |
+          exe=dist/YoutubeTerminal
+          [ "$RUNNER_OS" = "Windows" ] && exe="$exe.exe"
+          out=$("$exe" --version)
+          echo "$out"
+          [ "$out" = "YouTube Terminal $VERSION" ] || { echo "Zła wersja: '$out'" >&2; exit 1; }
+          "$exe" --help
+
+      - name: Pakowanie
+        run: |
+          mkdir -p out
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp dist/YoutubeTerminal.exe "out/${{ matrix.asset }}"
+          else
+            tar -czf "out/${{ matrix.asset }}" -C dist YoutubeTerminal
+          fi
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.rid }}
+          path: out/*
+
+  release:
+    needs: [version, build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-*
+          path: assets
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Wydanie na GitHubie
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          cd assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "YouTube Terminal $VERSION" --notes-file ../release-notes.md ./*

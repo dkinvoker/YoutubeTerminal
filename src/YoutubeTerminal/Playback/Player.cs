@@ -69,6 +69,12 @@ internal sealed class Player : IDisposable
     public bool Paused { get; private set; }
     public bool Seeking => _restartTimer != null;
 
+    /// <summary>Zapamiętywanie ostatniej klatki (piksele) — tylko do zrzutów ekranu (--keys … svg:plik).</summary>
+    public static bool KeepLastFrame;
+
+    /// <summary>Ostatnia klatka wideo w rozmiarze wyjściowym (gdy <see cref="KeepLastFrame"/>).</summary>
+    public (uint[] Pixels, int Width, int Height)? LastFrame => _session?.LastFrame;
+
     public int Presented => _session?.Presented ?? 0;
     public int Dropped => _session?.Dropped ?? 0;
     public double MeasuredFps => _session?.MeasuredFps ?? 0;
@@ -83,6 +89,9 @@ internal sealed class Player : IDisposable
     public float EffectiveVolume => Muted ? 0f : MathF.Pow(Math.Clamp(Volume / 100f, 0f, 1f), 1.7f);
 
     public bool IsLive { get; private set; }
+
+    /// <summary>Problem z dźwiękiem, który nie przerywa obrazu (np. brak serwera dźwięku) — do pokazania raz.</summary>
+    public volatile string? AudioProblem;
 
     public TimeSpan Position
     {
@@ -370,7 +379,7 @@ internal sealed class Player : IDisposable
         private readonly ManualResetEventSlim _audioReady = new(false);
         private readonly Stopwatch _wall = new();
         private Thread? _videoThread, _audioThread, _presentThread;
-        private volatile WaveOut? _wave;
+        private volatile IAudioOutput? _wave;
         private TimeSpan _audioBase;
         private bool _audioBaseSet;
         private volatile bool _started;
@@ -384,6 +393,18 @@ internal sealed class Player : IDisposable
         private readonly Stopwatch _fpsWatch = new();
         private int _fpsCount;
         private volatile bool _disposed;
+
+        private readonly object _lastLock = new();
+        private uint[] _last = [];
+
+        public (uint[] Pixels, int Width, int Height)? LastFrame
+        {
+            get
+            {
+                lock (_lastLock)
+                    return _last.Length > 0 ? ((uint[])_last.Clone(), _layout.PixelWidth, _layout.PixelHeight) : null;
+            }
+        }
 
         public int Presented;
         public int Dropped;
@@ -521,34 +542,41 @@ internal sealed class Player : IDisposable
             var ct = _cts.Token;
             try
             {
-                MF.EnsureStarted();
                 var track = demux;
-                using var dec = new H264Decoder(track.AnnexB ? null : track.AvcConfig ?? throw new InvalidDataException(L.T("Brak konfiguracji AVC", "Missing AVC configuration")), track.Width, track.Height);
-                uint[] full = [];
-                var scaled = new uint[Math.Max(1, _layout.PixelWidth * _layout.PixelHeight)];
                 TimeSpan minInterval = TimeSpan.FromSeconds(1.0 / Math.Max(1, _p.Options.MaxFps)) - TimeSpan.FromMilliseconds(2);
                 TimeSpan? lastTs = null;
                 TimeSpan frameDur = TimeSpan.FromSeconds(1.0 / 30);
 
-                dec.OnFrame = (time, y, uv, stride) =>
+                // Filtr działa przed konwersją kolorów i skalowaniem — pominięte klatki prawie nic nie kosztują.
+                bool Wanted(TimeSpan ts)
                 {
-                    var ts = TimeSpan.FromTicks(time);
-                    if (ts < _start - TimeSpan.FromMilliseconds(20)) return;            // dekodowanie do punktu przewinięcia
-                    if (lastTs is { } l && ts - l < minInterval && ts > l) return;       // limit FPS
-                    if (_started && ts < Clock - frameDur * 2) { Interlocked.Increment(ref Dropped); return; } // spóźniona
+                    if (ts < _start - TimeSpan.FromMilliseconds(20)) return false;            // dekodowanie do punktu przewinięcia
+                    if (lastTs is { } l && ts - l < minInterval && ts > l) return false;       // limit FPS
+                    if (_started && ts < Clock - frameDur * 2) { Interlocked.Increment(ref Dropped); return false; } // spóźniona
                     if (lastTs is { } l2 && ts > l2) frameDur = ts - l2 < TimeSpan.FromSeconds(0.2) ? ts - l2 : frameDur;
                     lastTs = ts;
+                    return true;
+                }
 
-                    int dw = dec.DisplayWidth, dh = dec.DisplayHeight;
-                    if (full.Length < dw * dh) full = new uint[dw * dh];
-                    ColorConvert.Nv12ToArgb(y, uv, stride, dec.CropX, dec.CropY, dw, dh, full, true);
-                    fixed (uint* f = full)
-                        Scaler.Resize(f, dw, dh, dw, scaled, _layout.PixelWidth, _layout.PixelHeight);
-                    var frame = _encoder.EncodeVideoFrame(scaled, _layout.PixelWidth, _layout.PixelHeight, _layout.Cells);
+                void OnFrame(TimeSpan ts, uint[] pixels)
+                {
+                    if (KeepLastFrame)
+                    {
+                        int n = _layout.PixelWidth * _layout.PixelHeight;
+                        lock (_lastLock)
+                        {
+                            if (_last.Length != n) _last = new uint[n];
+                            Array.Copy(pixels, _last, n);
+                        }
+                    }
+                    var frame = _encoder.EncodeVideoFrame(pixels, _layout.PixelWidth, _layout.PixelHeight, _layout.Cells);
                     frame.Time = ts;
                     _frames.Add(frame, ct);
                     _videoReady.Set();
-                };
+                }
+
+                using var dec = Codecs.CreateVideo(track, _layout.PixelWidth, _layout.PixelHeight, Wanted, OnFrame);
+                using var abort = ct.Register(dec.Abort);
 
                 foreach (var s in demux.Read(_start, ct))
                 {
@@ -577,14 +605,11 @@ internal sealed class Player : IDisposable
             var ct = _cts.Token;
             try
             {
-                MF.EnsureStarted();
                 var track = demux;
-                using var dec = new AacDecoder(track.AudioConfig, track.SampleRate, track.Channels);
                 long startTicks = _start.Ticks;
 
-                dec.OnPcm = (pcm, time) =>
+                void OnPcm(ReadOnlySpan<byte> pcm, long time, int rate, int ch)
                 {
-                    int rate = dec.SampleRate, ch = dec.Channels;
                     if (rate <= 0 || ch <= 0) return;
                     int block = ch * 2;
                     long frames = pcm.Length / block;
@@ -593,18 +618,22 @@ internal sealed class Player : IDisposable
                     int skip = 0;
                     if (time < startTicks)
                         skip = (int)((startTicks - time) * rate / TimeSpan.TicksPerSecond) * block;
-                    if (_wave == null)
+                    var wave = _wave;
+                    if (wave == null)
                     {
-                        _wave = new WaveOut(rate, ch, bufferCount: 8);
-                        _wave.SetVolume(_p.EffectiveVolume);
-                        _wave.Pause();
+                        wave = AudioOutputs.Create(rate, ch);
+                        wave.SetVolume(_p.EffectiveVolume);
+                        wave.Pause();
                         _audioBase = TimeSpan.FromTicks(Math.Max(startTicks, time));
                         _audioBaseSet = true;
+                        _wave = wave;
                     }
-                    _wave.Write(pcm[Math.Min(skip, pcm.Length)..], 1f, ct); // głośność ustawia SetVolume
-                    if (!_audioReady.IsSet && _wave.SubmittedFrames >= rate * 3 / 10) _audioReady.Set();
-                };
+                    wave.Write(pcm[Math.Min(skip, pcm.Length)..], ct); // głośność ustawia SetVolume
+                    if (!_audioReady.IsSet && wave.SubmittedFrames >= rate * 3 / 10) _audioReady.Set();
+                }
 
+                using var dec = Codecs.CreateAudio(track, OnPcm);
+                using var abort = ct.Register(dec.Abort);
                 foreach (var s in demux.Read(_start, ct))
                 {
                     ct.ThrowIfCancellationRequested();
@@ -620,6 +649,11 @@ internal sealed class Player : IDisposable
                 {
                     // Brak dźwięku nie przerywa obrazu — przechodzimy na zegar ścienny.
                     if (_p._videoDemux == null) _p.OnSessionError(this, ex);
+                    else
+                    {
+                        Storage.Log.Error("Audio", ex);
+                        _p.AudioProblem = ex.InnerException is InvalidOperationException ie ? ie.Message : ex.Message;
+                    }
                 }
             }
             finally
