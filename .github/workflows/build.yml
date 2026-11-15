@@ -129,6 +129,7 @@ jobs:
         with:
           name: tests-${{ matrix.rid }}
           path: TestResults
+          if-no-files-found: ignore
 
       - name: Native AOT
         run: |
