@@ -19,13 +19,13 @@ internal sealed class ChannelView : View
         _channelId = channelId;
         _titleHint = title ?? "";
         _list.LoadMore = (t, ct) => App.YT.BrowseContinuationAsync(t, ct);
-        _list.EmptyText = "Ta zakładka jest pusta.";
+        _list.EmptyText = L.T("Ta zakładka jest pusta.", "This tab is empty.");
         _list.Loading = true;
         Load(YouTubeClient.VideosTabParams, initial: true);
     }
 
     private readonly string _titleHint;
-    public override string Title => _page?.Channel.Title is { Length: > 0 } t ? t : _titleHint.Length > 0 ? _titleHint : "Kanał";
+    public override string Title => _page?.Channel.Title is { Length: > 0 } t ? t : _titleHint.Length > 0 ? _titleHint : L.T("Kanał", "Channel");
     public override ItemList? FocusedList => _list;
 
     private void Load(string? tabParams, bool initial)
@@ -51,7 +51,7 @@ internal sealed class ChannelView : View
         {
             _list.Loading = false;
             _error = ex.Message;
-            _list.Error = "Nie udało się wczytać kanału: " + ex.Message;
+            _list.Error = L.T("Nie udało się wczytać kanału: ", "Could not load the channel: ") + ex.Message;
         }, ct: ct);
     }
 
@@ -65,7 +65,7 @@ internal sealed class ChannelView : View
 
     private void CycleSort()
     {
-        if (_page == null || _page.Sorts.Count == 0) { App.ShowMessage("Ta zakładka nie ma opcji sortowania."); return; }
+        if (_page == null || _page.Sorts.Count == 0) { App.ShowMessage(L.T("Ta zakładka nie ma opcji sortowania.", "This tab has no sort options.")); return; }
         _sort = (_sort + 1) % _page.Sorts.Count;
         var chip = _page.Sorts[_sort];
         _cts?.Cancel();
@@ -83,10 +83,10 @@ internal sealed class ChannelView : View
     {
         get
         {
-            yield return ("← →", "Zakładki");
-            if (_page?.Sorts.Count > 0) yield return ("o", "Sortuj");
-            yield return ("s", App.Library.IsSubscribed(_channelId) ? "Anuluj sub." : "Subskrybuj");
-            yield return ("P", "Odtwórz wszystkie");
+            yield return ("← →", L.T("Zakładki", "Tabs"));
+            if (_page?.Sorts.Count > 0) yield return ("o", L.T("Sortuj", "Sort"));
+            yield return ("s", App.Library.IsSubscribed(_channelId) ? L.T("Anuluj sub.", "Unsubscribe") : L.T("Subskrybuj", "Subscribe"));
+            yield return ("P", L.T("Odtwórz wszystkie", "Play all"));
             foreach (var h in App.ItemHints(_list.Current).Where(h => h.Item1 is "Enter" or "p" or "w")) yield return h;
         }
     }
@@ -155,9 +155,9 @@ internal sealed class ChannelView : View
         var dim = new Style(Theme.Dim, Theme.Panel);
         s.TextTrunc(tx, area.Y, Title, bold, tw - 20);
         if (app.Library.IsSubscribed(_channelId))
-            s.TextRight(area.Right - 2, area.Y, " ✓ Subskrybujesz ", new Style(Theme.Text, 0x303030, Attr.Bold));
+            s.TextRight(area.Right - 2, area.Y, L.T(" ✓ Subskrybujesz ", " ✓ Subscribed "), new Style(Theme.Text, 0x303030, Attr.Bold));
         else
-            s.TextRight(area.Right - 2, area.Y, " Subskrybuj (s) ", new Style(0x0F0F0F, Theme.Text, Attr.Bold));
+            s.TextRight(area.Right - 2, area.Y, L.T(" Subskrybuj (s) ", " Subscribe (s) "), new Style(0x0F0F0F, Theme.Text, Attr.Bold));
         if (ch != null)
         {
             s.TextTrunc(tx, area.Y + 1, ItemList.Join(ch.Handle, ch.SubscribersText, ch.VideoCountText), dim, tw);
@@ -165,7 +165,7 @@ internal sealed class ChannelView : View
             for (int i = 0; i < desc.Count; i++) s.Text(tx, area.Y + 2 + i, desc[i], new Style(Theme.Muted, Theme.Panel), tw);
         }
         else if (_error != null) s.TextTrunc(tx, area.Y + 1, _error, new Style(Theme.Accent, Theme.Panel), tw);
-        else s.Text(tx, area.Y + 1, app.Spinner + " Wczytywanie kanału…", dim);
+        else s.Text(tx, area.Y + 1, app.Spinner + L.T(" Wczytywanie kanału…", " Loading the channel…"), dim);
 
         // Zakładki
         int ty = area.Y + headerH;

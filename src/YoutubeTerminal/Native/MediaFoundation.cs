@@ -90,7 +90,7 @@ internal static unsafe partial class MF
         EnsureStarted();
         IntPtr p;
         Guid c = clsid, iid = IID_IMFTransform;
-        Check(CoCreateInstance(&c, IntPtr.Zero, 1 /* CLSCTX_INPROC_SERVER */, &iid, &p), "Utworzenie dekodera");
+        Check(CoCreateInstance(&c, IntPtr.Zero, 1 /* CLSCTX_INPROC_SERVER */, &iid, &p), L.T("Utworzenie dekodera", "Creating the decoder"));
         return p;
     }
 
@@ -424,18 +424,18 @@ internal sealed class MediaFoundationException : Exception
     public int HResult32 { get; }
 
     public MediaFoundationException(string what, int hr)
-        : base($"{what} nie powiodło się (HRESULT 0x{hr:X8}){Describe(hr)}")
+        : base(L.T($"{what} nie powiodło się (HRESULT 0x{hr:X8}){Describe(hr)}", $"{what} failed (HRESULT 0x{hr:X8}){Describe(hr)}"))
     {
         HResult32 = hr;
     }
 
     private static string Describe(int hr) => (uint)hr switch
     {
-        0xC00D36C4 => " – nieobsługiwany format/kodek",
-        0xC00D36E6 => " – nieprawidłowy URL",
-        0xC00D36B4 => " – nieprawidłowy typ mediów",
-        0x80072EE7 => " – nie można rozwiązać nazwy serwera",
-        0xC00D0FD4 or 0x80190193 => " – dostęp zabroniony (403)",
+        0xC00D36C4 => L.T(" – nieobsługiwany format/kodek", " — unsupported format/codec"),
+        0xC00D36E6 => L.T(" – nieprawidłowy URL", " — invalid URL"),
+        0xC00D36B4 => L.T(" – nieprawidłowy typ mediów", " — invalid media type"),
+        0x80072EE7 => L.T(" – nie można rozwiązać nazwy serwera", " — cannot resolve the server name"),
+        0xC00D0FD4 or 0x80190193 => L.T(" – dostęp zabroniony (403)", " — access denied (403)"),
         _ => ""
     };
 }

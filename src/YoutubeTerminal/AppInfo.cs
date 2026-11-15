@@ -9,4 +9,7 @@ internal static class AppInfo
     public static string Name => "YouTube Terminal";
 
     public static string Title => $"{Name} {Version}";
+
+    /// <summary>Nazwa pliku programu (YoutubeTerminal.exe w Windows, YoutubeTerminal w Linux/macOS).</summary>
+    public static string ExeName => Path.GetFileName(Environment.ProcessPath) is { Length: > 0 } n ? n : OperatingSystem.IsWindows() ? "YoutubeTerminal.exe" : "YoutubeTerminal";
 }

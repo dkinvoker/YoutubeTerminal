@@ -29,7 +29,7 @@ internal abstract unsafe class MftDecoder : IDisposable
         {
             int hr = MF.T_GetOutputAvailableType(Mft, i, out IntPtr mt);
             if (hr == MF.MF_E_NO_MORE_TYPES || hr < 0)
-                throw new MediaFoundationException("Dekoder nie oferuje obsługiwanego formatu wyjściowego", hr);
+                throw new MediaFoundationException(L.T("Dekoder nie oferuje obsługiwanego formatu wyjściowego", "The decoder offers no supported output format"), hr);
             try
             {
                 if (IsWantedOutput(mt))
@@ -195,7 +195,7 @@ internal sealed unsafe class H264Decoder : MftDecoder
 
     private static (byte[] ParamSets, int NalLen) ParseAvcC(byte[] c)
     {
-        if (c.Length < 7) throw new InvalidDataException("Nieprawidłowa konfiguracja AVC.");
+        if (c.Length < 7) throw new InvalidDataException(L.T("Nieprawidłowa konfiguracja AVC.", "Invalid AVC configuration."));
         int nalLen = (c[4] & 3) + 1;
         var ms = new MemoryStream();
         int p = 5;

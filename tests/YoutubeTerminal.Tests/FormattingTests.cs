@@ -31,7 +31,7 @@ public class FormattingTests
     [InlineData(2_500_000_000, "2,5 mld wyświetleń")]
     public void FormatViews_PolishNumbers(long views, string expected)
     {
-        Assert.Equal(expected, YouTubeClient.FormatViews(views));
+        Assert.Equal(expected, YouTubeClient.FormatViews(views, Lang.Pl));
     }
 
     [Theory]
@@ -46,7 +46,7 @@ public class FormattingTests
     [InlineData(3 * 365 * 86400, "3 lata temu")]
     public void RelativeTime_Polish(int secondsAgo, string expected)
     {
-        Assert.Equal(expected, YouTubeClient.RelativeTime(DateTime.UtcNow.AddSeconds(-secondsAgo)));
+        Assert.Equal(expected, YouTubeClient.RelativeTime(DateTime.UtcNow.AddSeconds(-secondsAgo), Lang.Pl));
     }
 
     [Fact]

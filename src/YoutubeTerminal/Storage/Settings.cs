@@ -6,7 +6,7 @@ namespace YoutubeTerminal.Storage;
 
 internal sealed class Settings
 {
-    /// <summary>auto | sixel | halfblock</summary>
+    /// <summary>auto | sixel | octant | halfblock</summary>
     public string RenderMode { get; set; } = "auto";
     public bool ListThumbnails { get; set; } = true;
     /// <summary>Maksymalna wysokość strumienia: 0 = automatycznie.</summary>
@@ -23,21 +23,51 @@ internal sealed class Settings
     public bool ResumePlayback { get; set; } = true;
     public bool SaveHistory { get; set; } = true;
     public bool SyncOutput { get; set; } = true;
-    public string Language { get; set; } = "pl";
-    public string Region { get; set; } = "PL";
+    /// <summary>Język interfejsu: auto (wg systemu) | pl | en.</summary>
+    public string UiLanguage { get; set; } = "auto";
+    /// <summary>Język i region wyników YouTube; „auto” = język interfejsu i region systemu.</summary>
+    public string Language { get; set; } = "auto";
+    public string Region { get; set; } = "auto";
+
+    /// <summary>Wersja formatu ustawień (do migracji starszych plików).</summary>
+    public int Version { get; set; }
+
+    /// <summary>Język wyników YouTube (parametr hl).</summary>
+    [JsonIgnore]
+    public string EffectiveLanguage => Language is "" or "auto" ? L.Code : Language;
+
+    /// <summary>Region wyników YouTube (parametr gl).</summary>
+    [JsonIgnore]
+    public string EffectiveRegion => Region is "" or "auto" ? L.DetectRegion() ?? (L.IsPolish ? "PL" : "US") : Region;
+
     /// <summary>Ręczny rozmiar komórki w pikselach (0 = wykryj).</summary>
     public int CellWidth { get; set; }
     public int CellHeight { get; set; }
 
-    public static Settings Load()
+    public const int CurrentVersion = 2;
+
+    public static Settings Load() => Load(AppPaths.SettingsFile);
+
+    public static Settings Load(string path)
     {
+        Settings? s = null;
         try
         {
-            if (File.Exists(AppPaths.SettingsFile))
-                return JsonSerializer.Deserialize(File.ReadAllText(AppPaths.SettingsFile), StorageJson.Default.Settings) ?? new Settings();
+            if (File.Exists(path))
+                s = JsonSerializer.Deserialize(File.ReadAllText(path), StorageJson.Default.Settings);
         }
         catch { }
-        return new Settings();
+        s ??= new Settings();
+        s.Migrate();
+        return s;
+    }
+
+    /// <summary>Starsze wersje zapisywały na sztywno pl/PL — zamieniamy to na „auto” (wg języka interfejsu).</summary>
+    internal void Migrate()
+    {
+        if (Version >= CurrentVersion) return;
+        if (Language == "pl" && Region == "PL") { Language = "auto"; Region = "auto"; }
+        Version = CurrentVersion;
     }
 
     public void Save()
@@ -76,7 +106,7 @@ internal sealed class HistoryEntry
         ChannelId = ChannelId,
         DurationSeconds = DurationSeconds,
         DurationText = DurationSeconds > 0 ? Tui.TextUtil.FormatSeconds(DurationSeconds) : "",
-        PublishedText = "obejrzano " + YouTubeClient.RelativeTime(WatchedAt.ToUniversalTime()),
+        PublishedText = L.T("obejrzano ", "watched ") + YouTubeClient.RelativeTime(WatchedAt.ToUniversalTime()),
     };
 }
 
@@ -110,7 +140,7 @@ internal sealed class SavedVideo
         DurationSeconds = DurationSeconds,
         DurationText = DurationSeconds > 0 ? Tui.TextUtil.FormatSeconds(DurationSeconds) : "",
         ViewsText = ViewsText,
-        PublishedText = "dodano " + YouTubeClient.RelativeTime(AddedAt),
+        PublishedText = L.T("dodano ", "added ") + YouTubeClient.RelativeTime(AddedAt),
     };
 }
 
@@ -128,7 +158,7 @@ internal sealed class Subscription
         Title = Title,
         Handle = Handle,
         AvatarUrl = AvatarUrl,
-        SubscribersText = "subskrybujesz od " + SubscribedAt.ToLocalTime().ToString("yyyy-MM-dd"),
+        SubscribersText = L.T("subskrybujesz od ", "subscribed since ") + SubscribedAt.ToLocalTime().ToString("yyyy-MM-dd"),
     };
 }
 

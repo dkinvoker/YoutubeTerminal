@@ -5,7 +5,7 @@ using YoutubeTerminal.YouTube;
 
 namespace YoutubeTerminal.UI;
 
-/// <summary>Odtwarzacz pełnoekranowy: obraz Sixel/półbloki + pasek sterowania.</summary>
+/// <summary>Odtwarzacz pełnoekranowy: obraz Sixel/oktanty/półbloki + pasek sterowania.</summary>
 internal sealed class PlayerView : View
 {
     private readonly VideoItem _video;
@@ -37,12 +37,12 @@ internal sealed class PlayerView : View
     }
 
     public override bool FullScreen => true;
-    public override string Title => "Odtwarzacz";
+    public override string Title => L.T("Odtwarzacz", "Player");
 
     public static int AutoHeightFor(Terminal t)
     {
         double pxH = Math.Min((t.Height - 3) * t.CellHeight, t.Width * t.CellWidth * 9.0 / 16.0) * App.Current.Settings.VideoScale / 100.0;
-        if (App.Current.ImageMode == RenderMode.HalfBlock) return 360;
+        if (App.Current.ImageMode != RenderMode.Sixel) return 360;
         return pxH <= 380 ? 360 : pxH <= 520 ? 480 : pxH <= 760 ? 720 : 1080;
     }
 
@@ -67,7 +67,7 @@ internal sealed class PlayerView : View
             if (h.PositionSeconds > 10 && (dur <= 0 || h.PositionSeconds < dur - 15))
             {
                 start = TimeSpan.FromSeconds(h.PositionSeconds);
-                Osd($"Wznowiono od {TextUtil.FormatTime(start)} (Home — od początku)");
+                Osd(L.T($"Wznowiono od {TextUtil.FormatTime(start)} (Home — od początku)", $"Resumed at {TextUtil.FormatTime(start)} (Home — from the start)"));
             }
         }
         var screen = new Rect(0, 0, app.Term.Width, app.Term.Height);
@@ -136,12 +136,12 @@ internal sealed class PlayerView : View
             var next = _details?.Related.Items.OfType<VideoItem>().FirstOrDefault(v => !v.IsShort && !v.IsLive && !v.IsUpcoming && v.Id != _video.Id);
             if (next != null)
             {
-                App.ShowMessage("Autoodtwarzanie: " + next.Title);
+                App.ShowMessage(L.T("Autoodtwarzanie: ", "Autoplay: ") + next.Title);
                 App.Play(next, null, 0, replace: true);
                 return;
             }
         }
-        Osd("Koniec filmu — Spacja odtwarza ponownie, q zamyka");
+        Osd(L.T("Koniec filmu — Spacja odtwarza ponownie, q zamyka", "End of video — Space plays again, q closes"));
     }
 
     private void PlayAt(int idx)
@@ -181,8 +181,8 @@ internal sealed class PlayerView : View
         {
             bool seekKey = k.Key is Key.Left or Key.Right or Key.PageUp or Key.PageDown or Key.Home
                            || k.Is('j') || k.Is('l') || (k.Key == Key.Char && k.Char >= '0' && k.Char <= '9');
-            if (seekKey) { Osd("Transmisja na żywo — przewijanie niedostępne (End — do bieżącego momentu)"); return true; }
-            if (k.Key == Key.End) { p.JumpToLive(); Osd("● Na żywo"); return true; }
+            if (seekKey) { Osd(L.T("Transmisja na żywo — przewijanie niedostępne (End — do bieżącego momentu)", "Live stream — seeking is unavailable (End — jump to live)")); return true; }
+            if (k.Key == Key.End) { p.JumpToLive(); Osd(L.T("● Na żywo", "● Live")); return true; }
         }
 
         if (p.State == PlayerState.Error)
@@ -206,7 +206,7 @@ internal sealed class PlayerView : View
             case Key.Right: p.SeekRelative(shift ? 60 : 5); Osd(shift ? "⏩ 60 s" : "⏩ 5 s"); return true;
             case Key.PageUp: p.SeekRelative(-60); Osd("⏪ 60 s"); return true;
             case Key.PageDown: p.SeekRelative(60); Osd("⏩ 60 s"); return true;
-            case Key.Home: p.Seek(TimeSpan.Zero); Osd("⏮ Początek"); return true;
+            case Key.Home: p.Seek(TimeSpan.Zero); Osd(L.T("⏮ Początek", "⏮ Start")); return true;
             case Key.End: p.Seek(p.Duration - TimeSpan.FromSeconds(10)); return true;
             case Key.Up: ChangeVolume(5); return true;
             case Key.Down: ChangeVolume(-5); return true;
@@ -227,29 +227,34 @@ internal sealed class PlayerView : View
             case '-': case '_': ChangeVolume(-5); return true;
             case 'm':
                 p.Muted = !p.Muted;
-                Osd(p.Muted ? "🔇 Wyciszono" : "🔊 Dźwięk włączony");
+                Osd(p.Muted ? L.T("🔇 Wyciszono", "🔇 Muted") : L.T("🔊 Dźwięk włączony", "🔊 Sound on"));
                 return true;
             case 'f':
                 _immersive = !_immersive;
                 p.SetArea(VideoArea(new Rect(0, 0, app.Term.Width, app.Term.Height)));
                 return true;
             case 'i': _stats = !_stats; return true;
-            case 'n': if (_queue != null && _index + 1 < _queue.Count) PlayAt(_index + 1); else Osd("Brak następnego filmu w kolejce"); return true;
-            case 'N': if (_queue != null && _index > 0) PlayAt(_index - 1); else Osd("Brak poprzedniego filmu"); return true;
+            case 'n': if (_queue != null && _index + 1 < _queue.Count) PlayAt(_index + 1); else Osd(L.T("Brak następnego filmu w kolejce", "No next video in the queue")); return true;
+            case 'N': if (_queue != null && _index > 0) PlayAt(_index - 1); else Osd(L.T("Brak poprzedniego filmu", "No previous video")); return true;
             case '.': JumpChapter(1); return true;
             case ',': JumpChapter(-1); return true;
             case 'v':
-                if (!app.SixelAvailable && p.Options.Mode == RenderMode.HalfBlock) { Osd("Terminal nie obsługuje Sixel"); return true; }
-                p.Options.Mode = p.Options.Mode == RenderMode.Sixel ? RenderMode.HalfBlock : RenderMode.Sixel;
+                // Kolejno: Sixel (gdy terminal go obsługuje) → oktanty → półbloki.
+                p.Options.Mode = p.Options.Mode switch
+                {
+                    RenderMode.Sixel => RenderMode.Octant,
+                    RenderMode.Octant => RenderMode.HalfBlock,
+                    _ => app.SixelAvailable ? RenderMode.Sixel : RenderMode.Octant,
+                };
                 p.ApplyOptions();
-                Osd(p.Options.Mode == RenderMode.Sixel ? "Tryb: Sixel" : "Tryb: półbloki");
+                Osd(L.T("Tryb obrazu: ", "Picture mode: ") + ModeName(p.Options.Mode));
                 return true;
             case 'd':
                 p.Options.Dither = !p.Options.Dither;
                 p.Options.AdaptivePalette = !p.Options.Dither;
                 app.Settings.Dither = p.Options.Dither;
                 p.ApplyOptions();
-                Osd(p.Options.Dither ? "Paleta stała + dithering" : "Paleta adaptacyjna");
+                Osd(p.Options.Dither ? L.T("Paleta stała + dithering", "Fixed palette + dithering") : L.T("Paleta adaptacyjna", "Adaptive palette"));
                 return true;
             case '[':
             case ']':
@@ -257,12 +262,12 @@ internal sealed class PlayerView : View
                 app.Settings.VideoScale = sc;
                 p.Options.Scale = sc / 100.0;
                 p.ApplyOptions();
-                Osd($"Rozmiar obrazu: {sc}%");
+                Osd(L.T($"Rozmiar obrazu: {sc}%", $"Picture size: {sc}%"));
                 return true;
             case 'a':
                 p.Options.AudioOnly = !p.Options.AudioOnly;
                 p.ApplyOptions();
-                Osd(p.Options.AudioOnly ? "♪ Tylko dźwięk" : "▶ Obraz i dźwięk");
+                Osd(p.Options.AudioOnly ? L.T("♪ Tylko dźwięk", "♪ Audio only") : L.T("▶ Obraz i dźwięk", "▶ Video and audio"));
                 App.Invalidate();
                 return true;
             case 'q': app.Pop(); return true;
@@ -275,7 +280,7 @@ internal sealed class PlayerView : View
         {
             int pct = (k.Char - '0') * 10;
             p.Seek(TimeSpan.FromSeconds(p.Duration.TotalSeconds * pct / 100));
-            Osd($"Skok do {pct}%");
+            Osd(L.T($"Skok do {pct}%", $"Jump to {pct}%"));
             return true;
         }
         return false;
@@ -287,12 +292,12 @@ internal sealed class PlayerView : View
         p.Volume = Math.Clamp(p.Volume + delta, 0, 100);
         p.Muted = false;
         App.Settings.Volume = p.Volume;
-        Osd($"🔊 Głośność {p.Volume}%");
+        Osd(L.T($"🔊 Głośność {p.Volume}%", $"🔊 Volume {p.Volume}%"));
     }
 
     private void JumpChapter(int dir)
     {
-        if (_chapters.Count == 0 || _player == null) { Osd("Ten film nie ma rozdziałów"); return; }
+        if (_chapters.Count == 0 || _player == null) { Osd(L.T("Ten film nie ma rozdziałów", "This video has no chapters")); return; }
         double pos = _player.Position.TotalSeconds;
         Chapter? target;
         if (dir > 0) target = _chapters.FirstOrDefault(c => c.StartSeconds > pos + 1);
@@ -301,10 +306,17 @@ internal sealed class PlayerView : View
             var cur = _chapters.LastOrDefault(c => c.StartSeconds <= pos - 3);
             target = cur ?? _chapters[0];
         }
-        if (target == null) { Osd("To ostatni rozdział"); return; }
+        if (target == null) { Osd(L.T("To ostatni rozdział", "This is the last chapter")); return; }
         _player.Seek(TimeSpan.FromSeconds(target.StartSeconds));
         Osd("☰ " + target.Title);
     }
+
+    private static string ModeName(RenderMode m) => m switch
+    {
+        RenderMode.Sixel => "Sixel",
+        RenderMode.Octant => L.T("oktanty", "octants"),
+        _ => L.T("półbloki", "half blocks"),
+    };
 
     private Chapter? CurrentChapter(double pos) => _chapters.LastOrDefault(c => c.StartSeconds <= pos);
 
@@ -348,7 +360,7 @@ internal sealed class PlayerView : View
             var imgRect = new Rect(va.X + 4, va.Y + 2, va.W - 8, rows);
             var img = app.Images.Get(_video.LargeThumbnailUrl, imgRect, _video.ThumbnailUrl);
             if (img != null) s.AddImage(img);
-            s.TextCenter(va, va.Bottom - 3, "♪  Odtwarzanie tylko dźwięku  (a — przywróć obraz)", new Style(Theme.Dim, 0x000000, Attr.Bold));
+            s.TextCenter(va, va.Bottom - 3, L.T("♪  Odtwarzanie tylko dźwięku  (a — przywróć obraz)", "♪  Playing audio only  (a — bring the picture back)"), new Style(Theme.Dim, 0x000000, Attr.Bold));
         }
         else
         {
@@ -356,12 +368,12 @@ internal sealed class PlayerView : View
             int cy = va.Y + va.H / 2 - 2;
             s.TextCenter(va, cy, TextUtil.OneLine(_video.Title), new Style(Theme.Text, 0x000000, Attr.Bold));
             string msg = p.State == PlayerState.Error
-                ? "✖ " + (p.Error ?? "Błąd odtwarzania")
-                : app.Spinner + " " + (p.StatusText.Length > 0 ? p.StatusText : "Ładowanie…");
+                ? "✖ " + (p.Error ?? L.T("Błąd odtwarzania", "Playback error"))
+                : app.Spinner + " " + (p.StatusText.Length > 0 ? p.StatusText : L.T("Ładowanie…", "Loading…"));
             foreach (var line in TextUtil.Wrap(msg, Math.Min(va.W - 4, 100)))
                 s.TextCenter(va, cy += 2, line, msgStyle);
             if (p.State == PlayerState.Error)
-                s.TextCenter(va, cy + 2, "q — zamknij · o — otwórz w przeglądarce · Spacja — spróbuj ponownie", Theme.MutedS with { Bg = 0x000000 });
+                s.TextCenter(va, cy + 2, L.T("q — zamknij · o — otwórz w przeglądarce · Spacja — spróbuj ponownie", "q — close · o — open in the browser · Space — try again"), Theme.MutedS with { Bg = 0x000000 });
         }
 
         RenderControls(s, area, p);
@@ -387,7 +399,7 @@ internal sealed class PlayerView : View
         };
         if (p.Paused && p.State != PlayerState.Error) stateIcon = "⏸";
         string time = p.IsLive
-            ? $"oglądasz {TextUtil.FormatTime(pos)}"
+            ? L.T($"oglądasz {TextUtil.FormatTime(pos)}", $"watching {TextUtil.FormatTime(pos)}")
             : $"{TextUtil.FormatTime(pos)} / {(dur > TimeSpan.Zero ? TextUtil.FormatTime(dur) : "--:--")}";
 
         if (!_immersive)
@@ -415,7 +427,7 @@ internal sealed class PlayerView : View
         {
             // Transmisja: pasek „na żywo” zamiast postępu.
             for (int i = 0; i < barW; i++) s.Put(barX + i, py, "━", new Style(0x5A1A22, bg));
-            s.Text(barX, py, " ● NA ŻYWO ", Theme.LiveS);
+            s.Text(barX, py, L.T(" ● NA ŻYWO ", " ● LIVE "), Theme.LiveS);
             _progressRect = default;
         }
         else if (barW > 4)
@@ -443,21 +455,21 @@ internal sealed class PlayerView : View
             int y2 = ctrl.Y + 2;
             int x = ctrl.X + 2;
             x += s.Text(x, y2, stateIcon + " ", new Style(Theme.Text, bg, Attr.Bold));
-            string vol = p.Muted ? "🔇 wycisz." : $"🔊 {p.Volume}%";
+            string vol = p.Muted ? L.T("🔇 wycisz.", "🔇 muted") : $"🔊 {p.Volume}%";
             x += s.Text(x + 1, y2, vol, new Style(Theme.Dim, bg)) + 3;
-            string mode = p.Options.AudioOnly ? "♪ audio" : p.Options.Mode == RenderMode.Sixel ? "Sixel" : "Półbloki";
+            string mode = p.Options.AudioOnly ? "♪ audio" : ModeName(p.Options.Mode);
             x += s.Text(x, y2, mode, new Style(Theme.Dim, bg)) + 3;
             // Komunikat (np. „przewijanie niedostępne”) ma pierwszeństwo przed statystykami przez czas wyświetlania.
             if (_stats && _osd.Length == 0)
             {
-                string st = $"źródło {p.SourceInfo} · wyjście {p.VideoSize} · {p.MeasuredFps:0.0} fps · pominięte {p.Dropped}";
+                string st = L.T($"źródło {p.SourceInfo} · wyjście {p.VideoSize} · {p.MeasuredFps:0.0} fps · pominięte {p.Dropped}", $"source {p.SourceInfo} · output {p.VideoSize} · {p.MeasuredFps:0.0} fps · dropped {p.Dropped}");
                 s.TextTrunc(x, y2, st, new Style(Theme.Warn, bg), ctrl.Right - x - 2);
             }
             else
             {
-                string osd = _osd.Length > 0 ? _osd : p.State == PlayerState.Buffering && p.EverStarted ? app.Spinner + " Buforowanie…" : "";
+                string osd = _osd.Length > 0 ? _osd : p.State == PlayerState.Buffering && p.EverStarted ? app.Spinner + L.T(" Buforowanie…", " Buffering…") : "";
                 if (osd.Length > 0) s.TextTrunc(x, y2, osd, new Style(Theme.Text, bg, Attr.Bold), ctrl.W / 2);
-                string hints = "Spacja pauza  ←→ ±5s  ↑↓ głośność  , . rozdziały  f pełny ekran  i info  q zamknij";
+                string hints = L.T("Spacja pauza  ←→ ±5s  ↑↓ głośność  , . rozdziały  v obraz  f pełny ekran  i info  q zamknij", "Space pause  ←→ ±5s  ↑↓ volume  , . chapters  v picture  f full screen  i info  q close");
                 s.TextRight(ctrl.Right - 2, y2, TextUtil.Truncate(hints, Math.Max(0, ctrl.Right - x - TextUtil.Width(osd) - 6)), new Style(Theme.Muted, bg));
             }
         }

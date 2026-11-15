@@ -15,7 +15,7 @@ internal sealed class PlaylistView : View
         _item = item;
         _list.LoadMore = (t, ct) => App.YT.BrowseContinuationAsync(t, ct);
         _list.Loading = true;
-        _list.EmptyText = "Playlista jest pusta.";
+        _list.EmptyText = L.T("Playlista jest pusta.", "The playlist is empty.");
         App.RunAsync(ct => App.YT.GetPlaylistAsync(item.Id, item.FirstVideoId, ct), page =>
         {
             _page = page;
@@ -23,11 +23,11 @@ internal sealed class PlaylistView : View
         }, ex =>
         {
             _list.Loading = false;
-            _list.Error = "Nie udało się wczytać playlisty: " + ex.Message;
+            _list.Error = L.T("Nie udało się wczytać playlisty: ", "Could not load the playlist: ") + ex.Message;
         });
     }
 
-    public override string Title => _page?.Playlist.Title is { Length: > 0 } t ? t : _item.Title.Length > 0 ? _item.Title : "Playlista";
+    public override string Title => _page?.Playlist.Title is { Length: > 0 } t ? t : _item.Title.Length > 0 ? _item.Title : L.T("Playlista", "Playlist");
     public override ItemList? FocusedList => _list;
 
     private List<VideoItem> Videos => _list.Items.OfType<VideoItem>().Where(v => !v.IsUpcoming).ToList();
@@ -36,12 +36,12 @@ internal sealed class PlaylistView : View
     {
         get
         {
-            yield return ("Enter", "Otwórz");
-            yield return ("p", "Odtwórz stąd");
-            yield return ("P", "Odtwórz od początku");
-            yield return ("r", "Losowo");
-            yield return ("c", "Kanał");
-            yield return ("w", "Do obejrzenia");
+            yield return ("Enter", L.T("Otwórz", "Open"));
+            yield return ("p", L.T("Odtwórz stąd", "Play from here"));
+            yield return ("P", L.T("Odtwórz od początku", "Play from the start"));
+            yield return ("r", L.T("Losowo", "Shuffle"));
+            yield return ("c", L.T("Kanał", "Channel"));
+            yield return ("w", L.T("Do obejrzenia", "Watch later"));
         }
     }
 
@@ -56,7 +56,7 @@ internal sealed class PlaylistView : View
         {
             var shuffled = vids.OrderBy(_ => Random.Shared.Next()).ToList();
             App.Play(shuffled[0], shuffled, 0);
-            App.ShowMessage("Odtwarzanie losowe");
+            App.ShowMessage(L.T("Odtwarzanie losowe", "Shuffle play"));
             return true;
         }
         if ((k.Is('p') || k.Is(' ')) && _list.Current is VideoItem v)
@@ -83,7 +83,7 @@ internal sealed class PlaylistView : View
         var bold = new Style(Theme.Text, Theme.Panel, Attr.Bold);
         var dim = new Style(Theme.Dim, Theme.Panel);
         int x = area.X + 2, w = area.W - 4;
-        s.Text(x, area.Y, _item.IsMix || _page?.Playlist.IsMix == true ? "◎ SKŁADANKA" : "≡ PLAYLISTA", new Style(Theme.Link, Theme.Panel, Attr.Bold));
+        s.Text(x, area.Y, _item.IsMix || _page?.Playlist.IsMix == true ? L.T("◎ SKŁADANKA", "◎ MIX") : L.T("≡ PLAYLISTA", "≡ PLAYLIST"), new Style(Theme.Link, Theme.Panel, Attr.Bold));
         s.TextTrunc(x, area.Y + 1, TextUtil.OneLine(Title), bold, w);
         var p = _page?.Playlist;
         var meta = ItemList.Join(p?.ChannelName ?? _item.ChannelName, p?.VideoCountText is { Length: > 0 } vc ? vc : _item.VideoCountText, _page?.ViewsText);

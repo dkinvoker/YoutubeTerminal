@@ -70,7 +70,7 @@ internal sealed class HttpRangeReader
                 if (resp.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
                     return [];
                 if (resp.StatusCode == HttpStatusCode.Forbidden)
-                    throw new HttpRequestException("Serwer odmówił dostępu do strumienia (403) – link mógł wygasnąć.", null, resp.StatusCode);
+                    throw new HttpRequestException(L.T("Serwer odmówił dostępu do strumienia (403) – link mógł wygasnąć.", "The server denied access to the stream (403) — the link may have expired."), null, resp.StatusCode);
                 resp.EnsureSuccessStatusCode();
 
                 var cr = resp.Content.Headers.ContentRange;
@@ -108,7 +108,7 @@ internal sealed class HttpRangeReader
                 Thread.Sleep(300 * (attempt + 1));
             }
         }
-        throw new IOException("Błąd pobierania strumienia: " + last?.Message, last);
+        throw new IOException(L.T("Błąd pobierania strumienia: ", "Stream download error: ") + last?.Message, last);
     }
 
     private static void SkipBytes(Stream s, long count, CancellationToken ct)

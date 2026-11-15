@@ -150,7 +150,7 @@ internal static class YtDlp
 
     private static async Task<StreamInfo> RunAsync(string videoId, int maxHeight, bool audioOnly, CancellationToken ct)
     {
-        string exe = FindExecutable() ?? throw new InvalidOperationException("Nie znaleziono yt-dlp.exe – odtwarzanie jest niedostępne.");
+        string exe = FindExecutable() ?? throw new InvalidOperationException(L.T("Nie znaleziono yt-dlp – odtwarzanie jest niedostępne.", "yt-dlp not found — playback is unavailable."));
         var psi = CreateStartInfo(exe);
         AddCommonArgs(psi);
         psi.ArgumentList.Add("-J");
@@ -182,7 +182,7 @@ internal static class YtDlp
     private static string ExtractError(string stderr)
     {
         var lines = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var err = lines.LastOrDefault(l => l.StartsWith("ERROR", StringComparison.Ordinal)) ?? lines.LastOrDefault() ?? "nieznany błąd";
+        var err = lines.LastOrDefault(l => l.StartsWith("ERROR", StringComparison.Ordinal)) ?? lines.LastOrDefault() ?? L.T("nieznany błąd", "unknown error");
         if (err.StartsWith("ERROR: ", StringComparison.Ordinal)) err = err[7..];
         return err.Length > 300 ? err[..300] : err;
     }
@@ -251,14 +251,14 @@ internal static class YtDlp
 
         if (audioOnly) info.VideoUrl = null;
         if (info.VideoUrl == null && info.AudioUrl == null)
-            throw new InvalidOperationException("yt-dlp nie zwrócił żadnego strumienia.");
+            throw new InvalidOperationException(L.T("yt-dlp nie zwrócił żadnego strumienia.", "yt-dlp returned no streams."));
         return info;
     }
 
     /// <summary>Aktualizuje wypakowany yt-dlp (yt-dlp -U). Zwraca wynik tekstowy.</summary>
     public static async Task<string> UpdateAsync(CancellationToken ct)
     {
-        string exe = FindExecutable() ?? throw new InvalidOperationException("Nie znaleziono yt-dlp.exe");
+        string exe = FindExecutable() ?? throw new InvalidOperationException(L.T("Nie znaleziono yt-dlp", "yt-dlp not found"));
         var psi = CreateStartInfo(exe);
         psi.ArgumentList.Add("--ignore-config");
         psi.ArgumentList.Add("-U");
@@ -276,7 +276,7 @@ internal static class YtDlp
     public static async Task<string> VersionAsync(CancellationToken ct)
     {
         string? exe = FindExecutable();
-        if (exe == null) return "brak";
+        if (exe == null) return L.T("brak", "missing");
         var psi = CreateStartInfo(exe);
         psi.ArgumentList.Add("--version");
         using var proc = new Process { StartInfo = psi };

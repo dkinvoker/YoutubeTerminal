@@ -70,7 +70,7 @@ internal sealed class Mp4Demuxer
         var d = new Mp4Demuxer(new HttpRangeReader(url));
         d.ParseHeader(ct);
         d.Track = d._tracks.FirstOrDefault(t => t.Handler == handler)
-                  ?? throw new InvalidDataException(handler == "vide" ? "Brak ścieżki wideo w strumieniu." : "Brak ścieżki audio w strumieniu.");
+                  ?? throw new InvalidDataException(handler == "vide" ? L.T("Brak ścieżki wideo w strumieniu.", "No video track in the stream.") : L.T("Brak ścieżki audio w strumieniu.", "No audio track in the stream."));
         if (d.Track.Duration > 0) d.Duration = d.Track.ToTime(d.Track.Duration);
         if (d._segments is { Count: > 0 } segs && d._sidxTimescale > 0)
         {
@@ -92,7 +92,7 @@ internal sealed class Mp4Demuxer
     private void ParseHeader(CancellationToken ct)
     {
         _head = _http.Read(0, 256 * 1024, ct);
-        if (_head.Length < 16) throw new InvalidDataException("Strumień jest pusty.");
+        if (_head.Length < 16) throw new InvalidDataException(L.T("Strumień jest pusty.", "The stream is empty."));
 
         long pos = 0;
         bool haveMoov = false;
@@ -130,7 +130,7 @@ internal sealed class Mp4Demuxer
             pos += size;
         }
 
-        if (!haveMoov) throw new InvalidDataException("Nie znaleziono nagłówka moov w pliku MP4.");
+        if (!haveMoov) throw new InvalidDataException(L.T("Nie znaleziono nagłówka moov w pliku MP4.", "No moov header found in the MP4 file."));
     }
 
     private void ParseSidx(ReadOnlySpan<byte> b, long boxEnd)

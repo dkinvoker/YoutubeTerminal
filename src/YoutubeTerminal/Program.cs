@@ -3,6 +3,9 @@ using YoutubeTerminal;
 using YoutubeTerminal.Storage;
 using YoutubeTerminal.UI;
 
+// Język interfejsu jest potrzebny już przy pierwszych komunikatach (pomoc, instalacja).
+L.Current = L.Resolve(Settings.Load().UiLanguage);
+
 if (args.Length > 0 && args[0].StartsWith("--diag", StringComparison.Ordinal))
     return await Diagnostics.RunAsync(args);
 
@@ -14,12 +17,20 @@ if (args.Length > 0 && (args[0] is "-v" or "--version"))
 
 if (args.Length > 0 && (args[0] is "-h" or "--help" or "/?"))
 {
-    Console.WriteLine($"{AppInfo.Title} — przeglądarka YouTube w terminalu z wideo przez Sixel.");
+    string exe = AppInfo.ExeName;
+    Console.WriteLine(L.T($"{AppInfo.Title} — YouTube w terminalu, z wideo w Sixel, oktantach lub półblokach.",
+        $"{AppInfo.Title} — YouTube in your terminal, with video as Sixel, octants or half blocks."));
     Console.WriteLine();
-    Console.WriteLine("Użycie: YoutubeTerminal.exe [fraza wyszukiwania | link do filmu/kanału/playlisty]");
+    Console.WriteLine(L.T($"Użycie: {exe} [fraza wyszukiwania | link do filmu/kanału/playlisty]",
+        $"Usage: {exe} [search query | video/channel/playlist link]"));
     Console.WriteLine();
-    Console.WriteLine($"Dane aplikacji: {AppPaths.Root}");
-    Console.WriteLine($"Deinstalator:   {Installer.UninstallerName} (obok pliku .exe)");
+    Console.WriteLine(L.T("Opcje:", "Options:"));
+    Console.WriteLine(L.T("  -v, --version   wersja programu", "  -v, --version   print the version"));
+    Console.WriteLine(L.T("  -h, --help      ta pomoc", "  -h, --help      show this help"));
+    Console.WriteLine();
+    Console.WriteLine(L.T($"Dane aplikacji: {AppPaths.Root}", $"App data:    {AppPaths.Root}"));
+    Console.WriteLine(L.T($"Deinstalator:   {Installer.UninstallerName} (obok pliku programu)",
+        $"Uninstaller: {Installer.UninstallerName} (next to the program file)"));
     return 0;
 }
 
@@ -32,7 +43,7 @@ try
 }
 catch (Exception ex)
 {
-    messages = ["Instalacja: " + ex.Message];
+    messages = [L.T("Instalacja: ", "Setup: ") + ex.Message];
 }
 
 var app = new App(messages);
@@ -49,7 +60,7 @@ try
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine("Błąd krytyczny: " + ex);
+    Console.Error.WriteLine(L.T("Błąd krytyczny: ", "Fatal error: ") + ex);
     try { File.AppendAllText(AppPaths.LogFile, $"[{DateTime.Now:O}] {ex}\n"); } catch { }
     return 1;
 }

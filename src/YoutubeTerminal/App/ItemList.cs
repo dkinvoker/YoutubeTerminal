@@ -27,7 +27,7 @@ internal sealed class ItemList
     public bool LoadingMore { get; private set; }
     public bool Loading;
     public string? Error;
-    public string EmptyText = "Brak wyników.";
+    public string EmptyText = L.T("Brak wyników.", "No results.");
     public Func<YtItem, double>? ProgressOf;
     public bool AllowThumbnails = true;
 
@@ -109,7 +109,7 @@ internal sealed class ItemList
         {
             LoadingMore = false;
             Continuation = null;
-            App.Current.ShowError("Nie udało się wczytać kolejnych wyników: " + ex.Message);
+            App.Current.ShowError(L.T("Nie udało się wczytać kolejnych wyników: ", "Could not load more results: ") + ex.Message);
         }, quiet: true, ct: ct);
     }
 
@@ -159,7 +159,7 @@ internal sealed class ItemList
 
         if (Items.Count == 0)
         {
-            string msg = Loading ? App.Current.Spinner + " Wczytywanie…" : Error ?? EmptyText;
+            string msg = Loading ? App.Current.Spinner + L.T(" Wczytywanie…", " Loading…") : Error ?? EmptyText;
             s.TextCenter(area, area.Y + Math.Min(2, area.H - 1), msg, Error != null ? new Style(Theme.Accent, Theme.Bg) : Theme.DimS);
             return;
         }
@@ -214,7 +214,7 @@ internal sealed class ItemList
         if (LoadingMore)
         {
             int ly = area.Y + (Math.Min(Items.Count, _scroll + VisibleCount) - _scroll) * _itemH;
-            if (ly < area.Bottom) s.Text(area.X + 2, ly, app.Spinner + " Wczytywanie kolejnych…", Theme.DimS);
+            if (ly < area.Bottom) s.Text(area.X + 2, ly, app.Spinner + L.T(" Wczytywanie kolejnych…", " Loading more…"), Theme.DimS);
         }
     }
 
@@ -232,8 +232,8 @@ internal sealed class ItemList
             case VideoItem v:
             {
                 int cx = x;
-                if (v.IsLive) cx += s.Text(cx, y, " NA ŻYWO ", Theme.LiveS) + 1;
-                else if (v.IsUpcoming) cx += s.Text(cx, y, " PREMIERA ", new Style(0xFFFFFF, 0x065FD4, Attr.Bold)) + 1;
+                if (v.IsLive) cx += s.Text(cx, y, L.T(" NA ŻYWO ", " LIVE "), Theme.LiveS) + 1;
+                else if (v.IsUpcoming) cx += s.Text(cx, y, L.T(" PREMIERA ", " PREMIERE "), new Style(0xFFFFFF, 0x065FD4, Attr.Bold)) + 1;
                 else if (v.IsShort) cx += s.Text(cx, y, " Shorts ", new Style(0xFFFFFF, Theme.AccentSoft, Attr.Bold)) + 1;
                 string dur = v.DurationText;
                 int durW = dur.Length > 0 ? TextUtil.Width(dur) + 2 : 0;
@@ -256,10 +256,10 @@ internal sealed class ItemList
             {
                 int cx = x + s.Text(x, y, "◉ ", new Style(Theme.Accent, bg));
                 s.TextTrunc(cx, y, c.Title, title, w - 2);
-                if (lines >= 2) s.TextTrunc(x, y + 1, Join("Kanał", c.Handle, c.SubscribersText, c.VideoCountText), dim, w);
+                if (lines >= 2) s.TextTrunc(x, y + 1, Join(L.T("Kanał", "Channel"), c.Handle, c.SubscribersText, c.VideoCountText), dim, w);
                 if (lines >= 3)
                 {
-                    if (App.Current.Library.IsSubscribed(c.Id)) s.Text(x, y + 2, "✓ Subskrybujesz", new Style(Theme.Good, bg));
+                    if (App.Current.Library.IsSubscribed(c.Id)) s.Text(x, y + 2, L.T("✓ Subskrybujesz", "✓ Subscribed"), new Style(Theme.Good, bg));
                     else if (c.Description.Length > 0) s.TextTrunc(x, y + 2, TextUtil.OneLine(c.Description), muted, w);
                 }
                 break;
@@ -268,7 +268,7 @@ internal sealed class ItemList
             {
                 int cx = x + s.Text(x, y, p.IsMix ? "◎ " : "≡ ", new Style(Theme.Link, bg, Attr.Bold));
                 s.TextTrunc(cx, y, TextUtil.OneLine(p.Title), title, w - 2);
-                if (lines >= 2) s.TextTrunc(x, y + 1, Join(p.IsMix ? "Składanka" : "Playlista", p.ChannelName, p.VideoCountText), dim, w);
+                if (lines >= 2) s.TextTrunc(x, y + 1, Join(p.IsMix ? L.T("Składanka", "Mix") : L.T("Playlista", "Playlist"), p.ChannelName, p.VideoCountText), dim, w);
                 break;
             }
         }
@@ -335,9 +335,9 @@ internal static class PreviewPane
                 var meta = ItemList.Join(v.ViewsText, v.PublishedText, v.DurationText.Length > 0 ? "⏱ " + v.DurationText : null);
                 if (y < inner.Bottom) s.TextTrunc(inner.X, y++, meta, dim, inner.W);
                 var flags = new List<string>();
-                if (app.Library.IsInWatchLater(v.Id)) flags.Add("⏲ Do obejrzenia");
-                if (app.Library.GetHistory(v.Id) is { } h && h.PositionSeconds > 5) flags.Add("▶ Obejrzano do " + TextUtil.FormatSeconds(h.PositionSeconds));
-                if (v.ChannelId.Length > 0 && app.Library.IsSubscribed(v.ChannelId)) flags.Add("✓ Subskrybujesz");
+                if (app.Library.IsInWatchLater(v.Id)) flags.Add(L.T("⏲ Do obejrzenia", "⏲ Watch later"));
+                if (app.Library.GetHistory(v.Id) is { } h && h.PositionSeconds > 5) flags.Add(L.T("▶ Obejrzano do ", "▶ Watched up to ") + TextUtil.FormatSeconds(h.PositionSeconds));
+                if (v.ChannelId.Length > 0 && app.Library.IsSubscribed(v.ChannelId)) flags.Add(L.T("✓ Subskrybujesz", "✓ Subscribed"));
                 if (flags.Count > 0 && y < inner.Bottom) s.TextTrunc(inner.X, y++, string.Join("   ", flags), new Style(Theme.Warn, Theme.Panel), inner.W);
                 y++;
                 if (v.Description.Length > 0 && y < inner.Bottom)
@@ -348,7 +348,7 @@ internal static class PreviewPane
             {
                 y += s.Paragraph(new Rect(inner.X, y, inner.W, 2), c.Title, bold);
                 if (y < inner.Bottom) s.TextTrunc(inner.X, y++, ItemList.Join(c.Handle, c.SubscribersText, c.VideoCountText), dim, inner.W);
-                if (app.Library.IsSubscribed(c.Id) && y < inner.Bottom) s.Text(inner.X, y++, "✓ Subskrybujesz", new Style(Theme.Good, Theme.Panel));
+                if (app.Library.IsSubscribed(c.Id) && y < inner.Bottom) s.Text(inner.X, y++, L.T("✓ Subskrybujesz", "✓ Subscribed"), new Style(Theme.Good, Theme.Panel));
                 y++;
                 if (c.Description.Length > 0 && y < inner.Bottom)
                     s.Paragraph(new Rect(inner.X, y, inner.W, inner.Bottom - y), c.Description, txt);
@@ -358,10 +358,10 @@ internal static class PreviewPane
             {
                 y += s.Paragraph(new Rect(inner.X, y, inner.W, 3), p.Title, bold);
                 y++;
-                if (y < inner.Bottom) s.TextTrunc(inner.X, y++, ItemList.Join(p.IsMix ? "Składanka" : "Playlista", p.VideoCountText), dim, inner.W);
+                if (y < inner.Bottom) s.TextTrunc(inner.X, y++, ItemList.Join(p.IsMix ? L.T("Składanka", "Mix") : L.T("Playlista", "Playlist"), p.VideoCountText), dim, inner.W);
                 if (p.ChannelName.Length > 0 && y < inner.Bottom) s.TextTrunc(inner.X, y++, p.ChannelName, txt, inner.W);
                 y++;
-                if (y < inner.Bottom) s.TextTrunc(inner.X, y, "Enter — otwórz playlistę   p — odtwórz wszystko", dim, inner.W);
+                if (y < inner.Bottom) s.TextTrunc(inner.X, y, L.T("Enter — otwórz playlistę   p — odtwórz wszystko", "Enter — open the playlist   p — play all"), dim, inner.W);
                 break;
             }
         }

@@ -25,10 +25,10 @@ internal static class Installer
         CleanTemp();
 
         try { ExtractYtDlp(); }
-        catch (Exception ex) { messages.Add("Nie udało się wypakować yt-dlp: " + ex.Message); }
+        catch (Exception ex) { messages.Add(L.T("Nie udało się wypakować yt-dlp: ", "Could not extract yt-dlp: ") + ex.Message); }
 
         try { ExtractUninstaller(); }
-        catch (Exception ex) { messages.Add("Nie udało się utworzyć deinstalatora: " + ex.Message); }
+        catch (Exception ex) { messages.Add(L.T("Nie udało się utworzyć deinstalatora: ", "Could not create the uninstaller: ") + ex.Message); }
 
         return messages;
     }

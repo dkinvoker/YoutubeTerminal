@@ -136,7 +136,7 @@ internal abstract class HlsSourceBase : IMediaSource
                 if (pending.Count == 0)
                 {
                     if (pl.Ended) yield break;
-                    if (++emptyRefreshes > 30) throw new IOException("Transmisja nie dostarcza nowych segmentów.");
+                    if (++emptyRefreshes > 30) throw new IOException(L.T("Transmisja nie dostarcza nowych segmentów.", "The live stream stopped delivering new segments."));
                     continue;
                 }
                 emptyRefreshes = 0;

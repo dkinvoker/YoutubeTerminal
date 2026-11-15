@@ -6,7 +6,7 @@ namespace YoutubeTerminal.UI;
 /// <summary>Wyszukiwarka z podpowiedziami, filtrami, sortowaniem, wynikami i podglądem.</summary>
 internal sealed class SearchView : View
 {
-    private readonly TextInput _input = new() { Placeholder = "Szukaj w YouTube lub wklej link…" };
+    private readonly TextInput _input = new() { Placeholder = L.T("Szukaj w YouTube lub wklej link…", "Search YouTube or paste a link…") };
     private readonly ItemList _list = new();
     private bool _inputFocused = true;
     private SearchFilter _filter = SearchFilter.All;
@@ -20,8 +20,8 @@ internal sealed class SearchView : View
     private bool _suggestPending;
     private int _historyIndex;
 
-    private static readonly string[] FilterNames = ["Wszystko", "Filmy", "Kanały", "Playlisty"];
-    private static readonly string[] SortNames = ["Trafność", "Data przesłania", "Wyświetlenia", "Ocena"];
+    private static string[] FilterNames => [L.T("Wszystko", "All"), L.T("Filmy", "Videos"), L.T("Kanały", "Channels"), L.T("Playlisty", "Playlists")];
+    private static string[] SortNames => [L.T("Trafność", "Relevance"), L.T("Data przesłania", "Upload date"), L.T("Wyświetlenia", "View count"), L.T("Ocena", "Rating")];
 
     public SearchView()
     {
@@ -32,10 +32,10 @@ internal sealed class SearchView : View
             _suggestionIndex = -1;
         };
         _list.LoadMore = (token, ct) => App.YT.SearchContinuationAsync(token, ct);
-        _list.EmptyText = "Brak wyników.";
+        _list.EmptyText = L.T("Brak wyników.", "No results.");
     }
 
-    public override string Title => _lastQuery.Length > 0 ? $"„{_lastQuery}”" : "Szukaj";
+    public override string Title => _lastQuery.Length > 0 ? L.T($"„{_lastQuery}”", $"“{_lastQuery}”") : L.T("Szukaj", "Search");
     public override ItemList? FocusedList => _inputFocused ? null : _list;
     public override bool CapturesText => _inputFocused;
 
@@ -58,16 +58,16 @@ internal sealed class SearchView : View
         {
             if (_inputFocused)
             {
-                yield return ("Enter", "Szukaj");
-                yield return ("Tab", "Filtr");
-                yield return ("S-Tab", "Sortuj");
-                if (_list.Items.Count > 0) yield return ("↓", "Wyniki");
+                yield return ("Enter", L.T("Szukaj", "Search"));
+                yield return ("Tab", L.T("Filtr", "Filter"));
+                yield return ("S-Tab", L.T("Sortuj", "Sort"));
+                if (_list.Items.Count > 0) yield return ("↓", L.T("Wyniki", "Results"));
             }
             else
             {
                 foreach (var h in App.ItemHints(_list.Current)) yield return h;
-                yield return ("/", "Szukaj");
-                yield return ("Tab", "Filtr");
+                yield return ("/", L.T("Szukaj", "Search"));
+                yield return ("Tab", L.T("Filtr", "Filter"));
             }
         }
     }
@@ -125,12 +125,12 @@ internal sealed class SearchView : View
                 {
                     case "video":
                         App.OpenVideo(new VideoItem { Id = r.Id });
-                        if (r.StartSeconds > 0) App.ShowMessage($"Link wskazuje {TextUtil.FormatSeconds(r.StartSeconds)} — użyj p, aby odtworzyć.");
+                        if (r.StartSeconds > 0) App.ShowMessage(L.T($"Link wskazuje {TextUtil.FormatSeconds(r.StartSeconds)} — użyj p, aby odtworzyć.", $"The link points to {TextUtil.FormatSeconds(r.StartSeconds)} — press p to play from there."));
                         break;
                     case "channel": App.OpenChannel(r.Id); break;
-                    case "playlist": App.OpenPlaylist(new PlaylistItem { Id = r.Id, Title = "Playlista" }); break;
+                    case "playlist": App.OpenPlaylist(new PlaylistItem { Id = r.Id, Title = L.T("Playlista", "Playlist") }); break;
                 }
-            }, ex => App.ShowError("Nie rozpoznano linku: " + ex.Message), ct: ct);
+            }, ex => App.ShowError(L.T("Nie rozpoznano linku: ", "Unrecognized link: ") + ex.Message), ct: ct);
             return;
         }
         RunSearch(query, ct);
@@ -152,7 +152,7 @@ internal sealed class SearchView : View
         }, ex =>
         {
             _list.Loading = false;
-            _list.Error = "Błąd wyszukiwania: " + ex.Message;
+            _list.Error = L.T("Błąd wyszukiwania: ", "Search error: ") + ex.Message;
             _inputFocused = true;
         }, ct: ct);
     }
@@ -323,8 +323,8 @@ internal sealed class SearchView : View
         }
         var app = App;
         string gfx = app.ImageMode == Graphics.RenderMode.Sixel
-            ? $"Grafika: Sixel ({app.CellWidth}×{app.CellHeight} px/komórkę)"
-            : "Grafika: półbloki (Sixel niedostępny)";
+            ? L.T($"Grafika: Sixel ({app.CellWidth}×{app.CellHeight} px/komórkę)", $"Graphics: Sixel ({app.CellWidth}×{app.CellHeight} px per cell)")
+            : app.ImageMode == Graphics.RenderMode.Octant ? L.T("Grafika: oktanty (2×4 na komórkę)", "Graphics: octants (2×4 per cell)") : L.T("Grafika: półbloki (Sixel niedostępny)", "Graphics: half blocks (Sixel unavailable)");
         s.TextCenter(r, y++, gfx, Theme.MutedS);
         y++;
 
@@ -333,7 +333,7 @@ internal sealed class SearchView : View
         {
             int w = Math.Min(60, r.W - 4);
             int x = r.X + (r.W - w) / 2;
-            s.Text(x, y++, "Ostatnie wyszukiwania", new Style(Theme.Text, Theme.Bg, Attr.Bold));
+            s.Text(x, y++, L.T("Ostatnie wyszukiwania", "Recent searches"), new Style(Theme.Text, Theme.Bg, Attr.Bold));
             for (int i = 0; i < hist.Count && y < r.Bottom; i++, y++)
             {
                 bool sel = !_inputFocused && i == _historyIndex;
@@ -341,12 +341,12 @@ internal sealed class SearchView : View
                 s.Fill(new Rect(x, y, w, 1), st);
                 s.TextTrunc(x + 1, y, "↺  " + hist[i], st, w - 2);
             }
-            if (!_inputFocused && y < r.Bottom) s.Text(x, y, "Enter — szukaj ponownie · Del — usuń z historii", Theme.MutedS);
+            if (!_inputFocused && y < r.Bottom) s.Text(x, y, L.T("Enter — szukaj ponownie · Del — usuń z historii", "Enter — search again · Del — remove from history"), Theme.MutedS);
         }
         else
         {
-            s.TextCenter(r, y++, "Wpisz frazę i naciśnij Enter. Możesz też wkleić link do filmu, kanału lub playlisty.", Theme.DimS);
-            s.TextCenter(r, y++, "Tab zmienia filtr (filmy/kanały/playlisty), Shift+Tab — sortowanie, F1 — pomoc.", Theme.MutedS);
+            s.TextCenter(r, y++, L.T("Wpisz frazę i naciśnij Enter. Możesz też wkleić link do filmu, kanału lub playlisty.", "Type a query and press Enter. You can also paste a link to a video, channel or playlist."), Theme.DimS);
+            s.TextCenter(r, y++, L.T("Tab zmienia filtr (filmy/kanały/playlisty), Shift+Tab — sortowanie, F1 — pomoc.", "Tab changes the filter (videos/channels/playlists), Shift+Tab — sort, F1 — help."), Theme.MutedS);
         }
     }
 }

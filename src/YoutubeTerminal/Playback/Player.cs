@@ -48,7 +48,7 @@ internal sealed class Player : IDisposable
     public PlayerOptions Options { get; }
     public StreamInfo? Stream { get; private set; }
     public PlayerState State { get; private set; } = PlayerState.Resolving;
-    public string StatusText { get; private set; } = "Pobieranie informacji o strumieniu…";
+    public string StatusText { get; private set; } = L.T("Pobieranie informacji o strumieniu…", "Getting stream information…");
     public string? Error { get; private set; }
     public TimeSpan Duration { get; private set; }
     private int _volume = 80;
@@ -115,7 +115,7 @@ internal sealed class Player : IDisposable
         {
             try
             {
-                SetState(PlayerState.Resolving, "Pobieranie informacji o strumieniu (yt-dlp)…");
+                SetState(PlayerState.Resolving, L.T("Pobieranie informacji o strumieniu (yt-dlp)…", "Getting stream information (yt-dlp)…"));
                 int maxH = Options.MaxHeight > 0 ? Options.MaxHeight : AutoHeight(area);
                 // Zawsze pobieramy obraz i dźwięk — tryb „tylko dźwięk” można przełączać w trakcie.
                 var info = await YtDlp.ResolveAsync(Video.Id, maxH, false, ct).ConfigureAwait(false);
@@ -128,7 +128,7 @@ internal sealed class Player : IDisposable
                     IsLive = true;
                     Duration = TimeSpan.Zero;
                     _pendingPosition = TimeSpan.Zero;
-                    SetState(PlayerState.Buffering, "Łączenie z transmisją na żywo…");
+                    SetState(PlayerState.Buffering, L.T("Łączenie z transmisją na żywo…", "Connecting to the live stream…"));
                     byte[]? asc = null;
                     int rate = 0, ch = 0;
                     if (info.AudioUrl != null)
@@ -151,7 +151,7 @@ internal sealed class Player : IDisposable
                 else
                 {
                     if (info.Duration > 0) Duration = TimeSpan.FromSeconds(info.Duration);
-                    SetState(PlayerState.Buffering, "Otwieranie strumieni…");
+                    SetState(PlayerState.Buffering, L.T("Otwieranie strumieni…", "Opening streams…"));
                     var vTask = info.VideoUrl != null
                         ? Task.Run(() => Mp4Demuxer.Open(info.VideoUrl, "vide", ct), ct) : Task.FromResult<Mp4Demuxer?>(null)!;
                     var aTask = info.AudioUrl != null
@@ -162,9 +162,9 @@ internal sealed class Player : IDisposable
                     _audioDemux = ad != null ? new Mp4Source(ad) : null;
                 }
                 if (_videoDemux?.Codec is { } vc && vc is not ("avc1" or "avc3"))
-                    throw new NotSupportedException($"Nieobsługiwany kodek wideo: {vc}");
+                    throw new NotSupportedException(L.T("Nieobsługiwany kodek wideo: ", "Unsupported video codec: ") + vc);
                 if (_audioDemux?.Codec is { } ac && ac != "mp4a")
-                    throw new NotSupportedException($"Nieobsługiwany kodek audio: {ac}");
+                    throw new NotSupportedException(L.T("Nieobsługiwany kodek audio: ", "Unsupported audio codec: ") + ac);
                 if (Duration <= TimeSpan.Zero && !IsLive) Duration = _videoDemux?.Duration ?? _audioDemux?.Duration ?? TimeSpan.Zero;
 
                 lock (_lock)
@@ -183,7 +183,7 @@ internal sealed class Player : IDisposable
 
     private int AutoHeight(Rect area)
     {
-        if (Options.Mode == RenderMode.HalfBlock) return 360;
+        if (Options.Mode != RenderMode.Sixel) return 360;
         double pxH = Math.Min(area.H * Options.CellHeight, area.W * Options.CellWidth * 9.0 / 16.0) * Options.Scale;
         return pxH <= 380 ? 360 : pxH <= 520 ? 480 : pxH <= 760 ? 720 : 1080;
     }
@@ -224,7 +224,7 @@ internal sealed class Player : IDisposable
         }
 
         if (_videoDemux == null && _audioDemux == null) return;
-        SetState(PlayerState.Buffering, "Buforowanie…");
+        SetState(PlayerState.Buffering, L.T("Buforowanie…", "Buffering…"));
         var s = new Session(this, position, Paused);
         _session = s;
         s.Start();
@@ -240,7 +240,7 @@ internal sealed class Player : IDisposable
     internal void OnSessionEnded(Session s)
     {
         if (s != _session) return;
-        SetState(PlayerState.Ended, "Koniec");
+        SetState(PlayerState.Ended, L.T("Koniec", "Ended"));
         Ended?.Invoke();
     }
 
@@ -523,7 +523,7 @@ internal sealed class Player : IDisposable
             {
                 MF.EnsureStarted();
                 var track = demux;
-                using var dec = new H264Decoder(track.AnnexB ? null : track.AvcConfig ?? throw new InvalidDataException("Brak konfiguracji AVC"), track.Width, track.Height);
+                using var dec = new H264Decoder(track.AnnexB ? null : track.AvcConfig ?? throw new InvalidDataException(L.T("Brak konfiguracji AVC", "Missing AVC configuration")), track.Width, track.Height);
                 uint[] full = [];
                 var scaled = new uint[Math.Max(1, _layout.PixelWidth * _layout.PixelHeight)];
                 TimeSpan minInterval = TimeSpan.FromSeconds(1.0 / Math.Max(1, _p.Options.MaxFps)) - TimeSpan.FromMilliseconds(2);

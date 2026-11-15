@@ -128,7 +128,8 @@ internal sealed class App
         Term = new Terminal();
         Settings = Settings.Load();
         Library = Library.Load();
-        YT = new YouTubeClient { Language = Settings.Language, Region = Settings.Region };
+        L.Current = L.Resolve(Settings.UiLanguage);
+        YT = new YouTubeClient { Language = Settings.EffectiveLanguage, Region = Settings.EffectiveRegion };
         Images = new ImageService(YT.Http, Invalidate) { Background = Theme.Bg };
     }
 
@@ -154,9 +155,9 @@ internal sealed class App
 
         foreach (var m in _startupMessages) ShowError(m);
         if (YtDlp.FindExecutable() == null)
-            ShowError("Nie znaleziono yt-dlp — przeglądanie działa, ale odtwarzanie jest niedostępne.");
+            ShowError(L.T("Nie znaleziono yt-dlp — przeglądanie działa, ale odtwarzanie jest niedostępne.", "yt-dlp not found — browsing works, but playback is unavailable."));
         else if (!SixelAvailable && Settings.RenderMode == "auto")
-            ShowMessage("Terminal nie zgłasza obsługi Sixel — używam trybu półbloków. Zalecany Windows Terminal 1.22+.");
+            ShowMessage(L.T("Terminal nie zgłasza obsługi Sixel — używam półbloków (w Ustawieniach można włączyć oktanty).", "The terminal does not report Sixel support — using half blocks (octants can be enabled in Settings)."));
 
         try
         {
@@ -218,6 +219,7 @@ internal sealed class App
         ImageMode = Settings.RenderMode switch
         {
             "sixel" => RenderMode.Sixel,
+            "octant" => RenderMode.Octant,
             "halfblock" => RenderMode.HalfBlock,
             _ => SixelAvailable ? RenderMode.Sixel : RenderMode.HalfBlock,
         };
@@ -236,6 +238,20 @@ internal sealed class App
         Images.CellHeight = Term.CellHeight;
         Images.ClearEncoded();
         _renderer.Invalidate();
+        Invalidate();
+    }
+
+    /// <summary>
+    /// Zmiana języka interfejsu w trakcie działania: widoki zbudowane w starym języku (poza ustawieniami)
+    /// są odtwarzane przy następnym wejściu, a wyniki YouTube (przy „auto”) przechodzą na nowy język.
+    /// </summary>
+    public void ApplyLanguage()
+    {
+        L.Current = L.Resolve(Settings.UiLanguage);
+        YT.Language = Settings.EffectiveLanguage;
+        YT.Region = Settings.EffectiveRegion;
+        foreach (var sec in _roots.Keys.ToList())
+            if (sec != _section) _roots.Remove(sec);
         Invalidate();
     }
 
@@ -270,10 +286,10 @@ internal sealed class App
             while (_input.TryTake(out var ev))
             {
                 try { HandleInput(ev); }
-                catch (Exception ex) { Log.Error("UI", ex); ShowError("Błąd: " + ex.Message); }
+                catch (Exception ex) { Log.Error("UI", ex); ShowError(L.T("Błąd: ", "Error: ") + ex.Message); }
                 if (_quit) return;
             }
-            _ui.RunPending(ex => { Log.Error("UI", ex); ShowError("Błąd: " + ex.Message); });
+            _ui.RunPending(ex => { Log.Error("UI", ex); ShowError(L.T("Błąd: ", "Error: ") + ex.Message); });
 
             if (Term.UpdateSize())
             {
@@ -292,7 +308,7 @@ internal sealed class App
                 if (Top.Tick()) _ui.Invalidate();
                 Prefetch.Tick(Top);
             }
-            catch (Exception ex) { Log.Error("UI", ex); ShowError("Błąd: " + ex.Message); }
+            catch (Exception ex) { Log.Error("UI", ex); ShowError(L.T("Błąd: ", "Error: ") + ex.Message); }
 
             if (_ui.IsDirty && now - _lastRender >= 15)
             {
@@ -343,8 +359,8 @@ internal sealed class App
         x += s.Text(x, r.Y, " Terminal  ", new Style(Theme.Dim, Theme.Panel));
         (Section sec, string label)[] tabs =
         [
-            (Section.Search, "Szukaj"), (Section.Subscriptions, "Subskrypcje"), (Section.History, "Historia"),
-            (Section.WatchLater, "Do obejrzenia"), (Section.Settings, "Ustawienia"),
+            (Section.Search, L.T("Szukaj", "Search")), (Section.Subscriptions, L.T("Subskrypcje", "Subscriptions")), (Section.History, L.T("Historia", "History")),
+            (Section.WatchLater, L.T("Do obejrzenia", "Watch later")), (Section.Settings, L.T("Ustawienia", "Settings")),
         ];
         _tabHits.Clear();
         for (int i = 0; i < tabs.Length; i++)
@@ -379,7 +395,7 @@ internal sealed class App
             right = _message;
             rightSt = _messageError ? new Style(0xFF6B6B, Theme.Panel, Attr.Bold) : new Style(Theme.Text, Theme.Panel);
         }
-        else if (_ui.Busy > 0) right = Spinner + " Wczytywanie…";
+        else if (_ui.Busy > 0) right = Spinner + L.T(" Wczytywanie…", " Loading…");
 
         int rightW = Math.Min(TextUtil.Width(right), r.W / 2 + 10);
         int limit = r.Right - rightW - 2;
@@ -395,8 +411,8 @@ internal sealed class App
 
     private IEnumerable<(string, string)> GlobalHints()
     {
-        yield return ("F1", "Pomoc");
-        yield return (_stack.Count > 1 ? "Esc" : "q", _stack.Count > 1 ? "Wstecz" : "Wyjście");
+        yield return ("F1", L.T("Pomoc", "Help"));
+        yield return (_stack.Count > 1 ? "Esc" : "q", _stack.Count > 1 ? L.T("Wstecz", "Back") : L.T("Wyjście", "Quit"));
     }
 
     // ===================== Wejście =====================
@@ -553,7 +569,7 @@ internal sealed class App
 
     public void OpenChannel(string channelId, string? title = null)
     {
-        if (string.IsNullOrEmpty(channelId)) { ShowError("Brak informacji o kanale."); return; }
+        if (string.IsNullOrEmpty(channelId)) { ShowError(L.T("Brak informacji o kanale.", "No channel information.")); return; }
         Push(new ChannelView(channelId, title));
     }
 
@@ -564,10 +580,10 @@ internal sealed class App
     {
         if (YtDlp.FindExecutable() == null)
         {
-            ShowError("Odtwarzanie wymaga yt-dlp.exe (nie znaleziono).");
+            ShowError(L.T("Odtwarzanie wymaga yt-dlp (nie znaleziono).", "Playback requires yt-dlp (not found)."));
             return;
         }
-        if (v.IsUpcoming) { ShowError("To premiera, która jeszcze się nie rozpoczęła."); return; }
+        if (v.IsUpcoming) { ShowError(L.T("To premiera, która jeszcze się nie rozpoczęła.", "This premiere has not started yet.")); return; }
         var view = new PlayerView(v, queue, index, start, audioOnly);
         if (replace || Top is PlayerView) Replace(view);
         else Push(view);
@@ -587,7 +603,7 @@ internal sealed class App
                 RunAsync(ct => YT.GetPlaylistAsync(p.Id, p.FirstVideoId, ct), page =>
                 {
                     var vids = page.Content.Items.OfType<VideoItem>().ToList();
-                    if (vids.Count == 0) { ShowError("Playlista jest pusta."); return; }
+                    if (vids.Count == 0) { ShowError(L.T("Playlista jest pusta.", "The playlist is empty.")); return; }
                     Play(vids[0], vids, 0, audioOnly: audioOnly);
                 });
                 break;
@@ -600,20 +616,20 @@ internal sealed class App
     public void ToggleSubscribe(ChannelItem c)
     {
         bool now = Library.ToggleSubscription(c);
-        ShowMessage(now ? $"Subskrybujesz: {c.Title}" : $"Anulowano subskrypcję: {c.Title}");
+        ShowMessage(now ? L.T($"Subskrybujesz: {c.Title}", $"Subscribed: {c.Title}") : L.T($"Anulowano subskrypcję: {c.Title}", $"Unsubscribed: {c.Title}"));
         (_roots.GetValueOrDefault(Section.Subscriptions) as SubscriptionsView)?.MarkDirty();
     }
 
     public void ToggleSubscribe(string channelId, string title)
     {
-        if (string.IsNullOrEmpty(channelId)) { ShowError("Brak informacji o kanale."); return; }
+        if (string.IsNullOrEmpty(channelId)) { ShowError(L.T("Brak informacji o kanale.", "No channel information.")); return; }
         ToggleSubscribe(new ChannelItem { Id = channelId, Title = title });
     }
 
     public void ToggleWatchLater(VideoItem v)
     {
         bool now = Library.ToggleWatchLater(v);
-        ShowMessage(now ? "Dodano do „Do obejrzenia”" : "Usunięto z „Do obejrzenia”");
+        ShowMessage(now ? L.T("Dodano do „Do obejrzenia”", "Added to Watch later") : L.T("Usunięto z „Do obejrzenia”", "Removed from Watch later"));
     }
 
     public static string UrlOf(YtItem item) => item switch
@@ -627,7 +643,7 @@ internal sealed class App
     public void CopyLink(YtItem item)
     {
         Term.CopyToClipboard(UrlOf(item));
-        ShowMessage("Skopiowano link: " + UrlOf(item));
+        ShowMessage(L.T("Skopiowano link: ", "Link copied: ") + UrlOf(item));
     }
 
     public void OpenInBrowser(YtItem item)
@@ -635,11 +651,11 @@ internal sealed class App
         try
         {
             Process.Start(new ProcessStartInfo(UrlOf(item)) { UseShellExecute = true });
-            ShowMessage("Otwarto w przeglądarce");
+            ShowMessage(L.T("Otwarto w przeglądarce", "Opened in the browser"));
         }
         catch (Exception ex)
         {
-            ShowError("Nie udało się otworzyć przeglądarki: " + ex.Message);
+            ShowError(L.T("Nie udało się otworzyć przeglądarki: ", "Could not open the browser: ") + ex.Message);
         }
     }
 
@@ -677,11 +693,11 @@ internal sealed class App
     public static IEnumerable<(string, string)> ItemHints(YtItem? item)
     {
         if (item == null) yield break;
-        yield return ("Enter", "Otwórz");
-        if (item is not ChannelItem) yield return ("p", "Odtwórz");
-        if (item is VideoItem) yield return ("w", "Do obejrzenia");
-        yield return ("c", "Kanał");
-        yield return ("s", "Subskrybuj");
+        yield return ("Enter", L.T("Otwórz", "Open"));
+        if (item is not ChannelItem) yield return ("p", L.T("Odtwórz", "Play"));
+        if (item is VideoItem) yield return ("w", L.T("Do obejrzenia", "Watch later"));
+        yield return ("c", L.T("Kanał", "Channel"));
+        yield return ("s", L.T("Subskrybuj", "Subscribe"));
     }
 
     // ===================== Wątki / komunikaty =====================

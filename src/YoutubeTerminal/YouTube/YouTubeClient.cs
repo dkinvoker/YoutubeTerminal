@@ -21,8 +21,10 @@ internal sealed partial class YouTubeClient
     private string? _visitorData;
     private Task? _initTask;
 
-    public string Language { get; set; } = "pl";
-    public string Region { get; set; } = "PL";
+    public string Language { get; set; } = "en";
+    public string Region { get; set; } = "US";
+
+    private string AcceptLanguage => Language == "en" ? "en-US,en;q=0.9" : $"{Language}-{Region},{Language};q=0.9,en;q=0.8";
 
     public YouTubeClient()
     {
@@ -35,7 +37,6 @@ internal sealed partial class YouTubeClient
         };
         _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        _http.DefaultRequestHeaders.AcceptLanguage.ParseAdd("pl-PL,pl;q=0.9,en;q=0.8");
     }
 
     public HttpClient Http => _http;
@@ -50,6 +51,7 @@ internal sealed partial class YouTubeClient
             using var req = new HttpRequestMessage(HttpMethod.Get, "https://www.youtube.com/?hl=" + Language);
             // SOCS=CAI: odrzucenie zgody na ciasteczka (najbardziej prywatna opcja), bez strony consent.
             req.Headers.Add("Cookie", "SOCS=CAI");
+            req.Headers.TryAddWithoutValidation("Accept-Language", AcceptLanguage);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             using var resp = await _http.SendAsync(req, cts.Token).ConfigureAwait(false);
             var html = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
@@ -100,17 +102,18 @@ internal sealed partial class YouTubeClient
                 req.Headers.Add("X-YouTube-Client-Name", "1");
                 req.Headers.Add("X-YouTube-Client-Version", _clientVersion);
                 req.Headers.Add("Origin", "https://www.youtube.com");
+                req.Headers.TryAddWithoutValidation("Accept-Language", AcceptLanguage);
                 if (_visitorData != null) req.Headers.Add("X-Goog-Visitor-Id", _visitorData);
                 using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
                 var text = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
                 {
-                    if ((int)resp.StatusCode >= 500) throw new HttpRequestException($"Błąd serwera YouTube ({(int)resp.StatusCode})");
-                    throw new InvalidOperationException($"YouTube odrzucił żądanie ({(int)resp.StatusCode}).");
+                    if ((int)resp.StatusCode >= 500) throw new HttpRequestException(L.T($"Błąd serwera YouTube ({(int)resp.StatusCode})", $"YouTube server error ({(int)resp.StatusCode})"));
+                    throw new InvalidOperationException(L.T($"YouTube odrzucił żądanie ({(int)resp.StatusCode}).", $"YouTube rejected the request ({(int)resp.StatusCode})."));
                 }
                 if (Environment.GetEnvironmentVariable("YT_DUMP") is { Length: > 0 } dumpDir)
                     File.WriteAllText(Path.Combine(dumpDir, $"{endpoint.Replace('/', '_')}_{DateTime.Now:HHmmssfff}.json"), text);
-                return JsonNode.Parse(text) ?? throw new InvalidDataException("Pusta odpowiedź");
+                return JsonNode.Parse(text) ?? throw new InvalidDataException(L.T("Pusta odpowiedź", "Empty response"));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
@@ -119,7 +122,7 @@ internal sealed partial class YouTubeClient
                 await Task.Delay(400 * (attempt + 1), ct).ConfigureAwait(false);
             }
         }
-        throw new IOException("Brak połączenia z YouTube: " + last?.Message, last);
+        throw new IOException(L.T("Brak połączenia z YouTube: ", "Cannot connect to YouTube: ") + last?.Message, last);
     }
 
     // ---------------- Wyszukiwanie ----------------
@@ -183,7 +186,7 @@ internal sealed partial class YouTubeClient
         if (!string.IsNullOrEmpty(tabParams)) body["params"] = tabParams;
         var root = await PostAsync("browse", body, ct).ConfigureAwait(false);
         if (root.At("alerts")?.ToJsonString() is { } alerts && root.At("contents") == null)
-            throw new InvalidOperationException("Kanał jest niedostępny.");
+            throw new InvalidOperationException(L.T("Kanał jest niedostępny.", "This channel is unavailable."));
         return Parsers.ParseChannel(root, channelId);
     }
 
@@ -201,7 +204,7 @@ internal sealed partial class YouTubeClient
         if (root.At("contents") == null)
         {
             var alert = root.Find("alertRenderer").Text("text");
-            throw new InvalidOperationException(alert.Length > 0 ? alert : "Playlista jest niedostępna.");
+            throw new InvalidOperationException(alert.Length > 0 ? alert : L.T("Playlista jest niedostępna.", "This playlist is unavailable."));
         }
         return Parsers.ParsePlaylist(root, playlistId);
     }
@@ -220,7 +223,7 @@ internal sealed partial class YouTubeClient
         page.Playlist.IsMix = true;
         Parsers.CollectItems(pl.At("contents"), page.Content);
         page.Content.Continuation = null;
-        page.Playlist.VideoCountText = page.Content.Items.Count + " filmów";
+        page.Playlist.VideoCountText = Count(page.Content.Items.Count, "film", "filmy", "filmów", "video", "videos");
         return page;
     }
 
@@ -231,7 +234,7 @@ internal sealed partial class YouTubeClient
         var root = await PostAsync("next", new JsonObject { ["videoId"] = videoId }, ct).ConfigureAwait(false);
         var d = Parsers.ParseNext(root, videoId);
         if (d.Video.Title.Length == 0)
-            throw new InvalidOperationException("Film jest niedostępny.");
+            throw new InvalidOperationException(L.T("Film jest niedostępny.", "This video is unavailable."));
         return d;
     }
 
@@ -268,7 +271,7 @@ internal sealed partial class YouTubeClient
         if (bid.StartsWith("VL", StringComparison.Ordinal)) return new Resolved("playlist", bid[2..]);
         var watch = root.Find("watchEndpoint");
         if (watch.Str("videoId") is { Length: > 0 } vid) return new Resolved("video", vid);
-        throw new InvalidOperationException("Nie rozpoznano adresu.");
+        throw new InvalidOperationException(L.T("Nie rozpoznano adresu.", "Unrecognized address."));
     }
 
     // ---------------- RSS (subskrypcje) ----------------
@@ -333,18 +336,43 @@ internal sealed partial class YouTubeClient
         return list.Where(v => v.Id.Length > 0).ToList();
     }
 
-    public static string FormatViews(long v) => (v switch
+    public static string FormatViews(long v, Lang? lang = null)
     {
-        >= 1_000_000_000 => $"{v / 1e9:0.#} mld wyświetleń",
-        >= 1_000_000 => $"{v / 1e6:0.#} mln wyświetleń",
-        >= 1_000 => $"{v / 1e3:0.#} tys. wyświetleń",
-        1 => "1 wyświetlenie",
-        _ => Plural((int)Math.Min(v, int.MaxValue), "wyświetlenie", "wyświetlenia", "wyświetleń"),
-    }).Replace('.', ',').Replace("tys,", "tys.");
+        if ((lang ?? L.Current) == Lang.En)
+        {
+            return v switch
+            {
+                >= 1_000_000_000 => $"{v / 1e9:0.#}B views",
+                >= 1_000_000 => $"{v / 1e6:0.#}M views",
+                >= 1_000 => $"{v / 1e3:0.#}K views",
+                1 => "1 view",
+                _ => $"{v} views",
+            };
+        }
+        return (v switch
+        {
+            >= 1_000_000_000 => $"{v / 1e9:0.#} mld wyświetleń",
+            >= 1_000_000 => $"{v / 1e6:0.#} mln wyświetleń",
+            >= 1_000 => $"{v / 1e3:0.#} tys. wyświetleń",
+            1 => "1 wyświetlenie",
+            _ => Plural((int)Math.Min(v, int.MaxValue), "wyświetlenie", "wyświetlenia", "wyświetleń"),
+        }).Replace('.', ',').Replace("tys,", "tys.");
+    }
 
-    public static string RelativeTime(DateTime utc)
+    public static string RelativeTime(DateTime utc, Lang? lang = null)
     {
         var d = DateTime.UtcNow - utc;
+        if ((lang ?? L.Current) == Lang.En)
+        {
+            static string Ago(int n, string unit) => n == 1 ? $"1 {unit} ago" : $"{n} {unit}s ago";
+            if (d.TotalMinutes < 1) return "just now";
+            if (d.TotalHours < 1) return Ago((int)d.TotalMinutes, "minute");
+            if (d.TotalDays < 1) return Ago((int)d.TotalHours, "hour");
+            if (d.TotalDays < 7) return Ago((int)d.TotalDays, "day");
+            if (d.TotalDays < 31) return Ago((int)(d.TotalDays / 7), "week");
+            if (d.TotalDays < 365) return Ago((int)(d.TotalDays / 30), "month");
+            return Ago((int)(d.TotalDays / 365), "year");
+        }
         if (d.TotalMinutes < 1) return "przed chwilą";
         if (d.TotalHours < 1) return Plural((int)d.TotalMinutes, "minutę", "minuty", "minut") + " temu";
         if (d.TotalDays < 1) return Plural((int)d.TotalHours, "godzinę", "godziny", "godzin") + " temu";
@@ -353,6 +381,10 @@ internal sealed partial class YouTubeClient
         if (d.TotalDays < 365) return Plural((int)(d.TotalDays / 30), "miesiąc", "miesiące", "miesięcy") + " temu";
         return Plural((int)(d.TotalDays / 365), "rok", "lata", "lat") + " temu";
     }
+
+    /// <summary>Liczba z rzeczownikiem: po polsku trzy formy (1 / 2–4 / 5+), po angielsku dwie.</summary>
+    public static string Count(int n, string plOne, string plFew, string plMany, string enOne, string enMany) =>
+        L.Current == Lang.Pl ? Plural(n, plOne, plFew, plMany) : n == 1 ? "1 " + enOne : $"{n} {enMany}";
 
     public static string Plural(int n, string one, string few, string many)
     {

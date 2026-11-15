@@ -106,6 +106,7 @@ public class LibraryTests
         var s = JsonSerializer.Deserialize("""{"volume":10}""", StorageJson.Default.Settings)!;
         Assert.Equal(10, s.Volume);
         Assert.True(s.Autoplay);
-        Assert.Equal("pl", s.Language);
+        Assert.Equal("auto", s.Language);
+        Assert.Equal("auto", s.UiLanguage);
     }
 }

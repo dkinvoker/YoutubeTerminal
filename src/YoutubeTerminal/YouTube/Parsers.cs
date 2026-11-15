@@ -215,7 +215,7 @@ internal static partial class Parsers
             FirstVideoId = r.Find("watchEndpoint").Str("videoId"),
             IsMix = id.StartsWith("RD", StringComparison.Ordinal),
         };
-        if (p.VideoCountText.Length == 0 && r.Str("videoCount") is { Length: > 0 } cnt) p.VideoCountText = cnt + " filmów";
+        if (p.VideoCountText.Length == 0 && r.Str("videoCount") is { Length: > 0 } cnt) p.VideoCountText = int.TryParse(cnt, out int n) ? YouTubeClient.Count(n, "film", "filmy", "filmów", "video", "videos") : cnt;
         (p.ChannelName, p.ChannelId) = Byline(r);
         var thumbs = r.At("thumbnails", 0, "thumbnails") ?? r.At("thumbnail", "thumbnails") ?? r.At("thumbnailRenderer")?.Find("thumbnails");
         p.Thumbnail = thumbs.BestThumb(320);
@@ -416,8 +416,8 @@ internal static partial class Parsers
             foreach (var t in parts)
             {
                 if (t == p.ChannelName || t.StartsWith("Autor", StringComparison.Ordinal) || t.StartsWith("by ", StringComparison.Ordinal)) continue;
-                if (p.VideoCountText.Length == 0 && char.IsDigit(t[0]) && t.Contains("film", StringComparison.OrdinalIgnoreCase)) p.VideoCountText = t;
-                else if (page.ViewsText.Length == 0 && t.Contains("wyświetl", StringComparison.OrdinalIgnoreCase)) page.ViewsText = t;
+                if (p.VideoCountText.Length == 0 && char.IsDigit(t[0]) && (t.Contains("film", StringComparison.OrdinalIgnoreCase) || t.Contains("video", StringComparison.OrdinalIgnoreCase))) p.VideoCountText = t;
+                else if (page.ViewsText.Length == 0 && (t.Contains("wyświetl", StringComparison.OrdinalIgnoreCase) || t.Contains("view", StringComparison.OrdinalIgnoreCase))) page.ViewsText = t;
             }
             if (page.Description.Length == 0) page.Description = ph.At("description").Find("content").Str();
         }
@@ -592,7 +592,7 @@ internal static partial class Parsers
             Author = e.Str("author", "displayName"),
             Text = e.Str("properties", "content", "content"),
             Published = e.Str("properties", "publishedTime"),
-            Likes = e.Str("toolbar", "likeCountNotliked"),
+            Likes = e.Str("toolbar", "likeCountNotliked").Trim(),
             ReplyCountText = e.Str("toolbar", "replyCount"),
             IsCreator = e.Str("author", "isCreator") == "true",
             IsReply = e.Long("properties", "replyLevel") > 0,

@@ -26,20 +26,20 @@ internal sealed class VideoView : View
     private int _commentSel;
     private int _commentScroll;
     private readonly HashSet<int> _expandedLoading = new();
-    private CancellationTokenSource? _commentsCts;
+    private readonly LatestRequest _commentsReq = new();
 
-    private static readonly string[] TabNames = ["Opis", "Rozdziały", "Komentarze", "Podobne"];
+    private static string[] TabNames => [L.T("Opis", "Description"), L.T("Rozdziały", "Chapters"), L.T("Komentarze", "Comments"), L.T("Podobne", "Related")];
 
     public VideoView(VideoItem v)
     {
         _video = v;
         _related.LoadMore = (t, ct) => App.YT.NextContinuationAsync(t, ct);
-        _related.EmptyText = "Brak podobnych filmów.";
+        _related.EmptyText = L.T("Brak podobnych filmów.", "No related videos.");
         _related.AllowThumbnails = true;
         Load();
     }
 
-    public override string Title => TextUtil.Truncate(_video.Title.Length > 0 ? _video.Title : "Film", 40);
+    public override string Title => TextUtil.Truncate(_video.Title.Length > 0 ? _video.Title : L.T("Film", "Video"), 40);
     public override ItemList? FocusedList => _tab == 3 ? _related : null;
 
     private void Load()
@@ -86,19 +86,22 @@ internal sealed class VideoView : View
     {
         if (_details?.CommentsToken == null && reset) return;
         string? token = reset ? (_commentSorts.Count > _commentSort && _commentSorts.Count > 0 ? _commentSorts[_commentSort].Token : _details!.CommentsToken) : _commentsCont;
-        if (token == null || _commentsLoading) return;
+        if (token == null || (_commentsLoading && !reset)) return;
+        // Reset (np. zmiana sortowania) anuluje trwające żądania i zawsze dostaje świeży token;
+        // spóźnione odpowiedzi poprzedniej generacji są odrzucane.
+        var (gen, ct) = reset ? _commentsReq.Restart() : _commentsReq.Continue();
         if (reset)
         {
-            _commentsCts?.Cancel();
             _comments.Clear();
+            _expandedLoading.Clear();
+            _commentsCont = null;
             _commentSel = 0;
             _commentScroll = 0;
         }
-        _commentsCts ??= new CancellationTokenSource();
-        var ct = _commentsCts.Token;
         _commentsLoading = true;
         App.RunAsync(c => App.YT.GetCommentsAsync(token, c), page =>
         {
+            if (!_commentsReq.IsCurrent(gen)) return;
             _commentsLoading = false;
             _commentsLoaded = true;
             _comments.AddRange(page.Comments);
@@ -107,9 +110,10 @@ internal sealed class VideoView : View
             if (page.Sorts.Count > 0 && _commentSorts.Count == 0) _commentSorts = page.Sorts;
         }, ex =>
         {
+            if (!_commentsReq.IsCurrent(gen)) return;
             _commentsLoading = false;
             _commentsLoaded = true;
-            App.ShowError("Komentarze: " + ex.Message);
+            App.ShowError(L.T("Komentarze: ", "Comments: ") + ex.Message);
         }, quiet: true, ct: ct);
     }
 
@@ -141,15 +145,15 @@ internal sealed class VideoView : View
     {
         get
         {
-            yield return ("Enter/p", "Odtwórz");
-            yield return ("a", "Dźwięk");
-            if (App.Library.GetHistory(_video.Id) is { PositionSeconds: > 5 }) yield return ("r", "Od początku");
-            yield return ("Tab", "Zakładki");
-            yield return ("c", "Kanał");
-            yield return ("s", App.Library.IsSubscribed(_video.ChannelId) ? "Anuluj sub." : "Subskrybuj");
-            yield return ("w", "Do obejrzenia");
-            yield return ("y", "Kopiuj link");
-            yield return ("o", "Przeglądarka");
+            yield return ("Enter/p", L.T("Odtwórz", "Play"));
+            yield return ("a", L.T("Dźwięk", "Audio"));
+            if (App.Library.GetHistory(_video.Id) is { PositionSeconds: > 5 }) yield return ("r", L.T("Od początku", "From start"));
+            yield return ("Tab", L.T("Zakładki", "Tabs"));
+            yield return ("c", L.T("Kanał", "Channel"));
+            yield return ("s", App.Library.IsSubscribed(_video.ChannelId) ? L.T("Anuluj sub.", "Unsubscribe") : L.T("Subskrybuj", "Subscribe"));
+            yield return ("w", L.T("Do obejrzenia", "Watch later"));
+            yield return ("y", L.T("Kopiuj link", "Copy link"));
+            yield return ("o", L.T("Przeglądarka", "Browser"));
         }
     }
 
@@ -191,9 +195,8 @@ internal sealed class VideoView : View
                 if (k.Is('o') && _commentSorts.Count > 1)
                 {
                     _commentSort = (_commentSort + 1) % _commentSorts.Count;
-                    _commentsLoading = false;
                     LoadComments(true);
-                    App.ShowMessage("Sortowanie komentarzy: " + _commentSorts[_commentSort].Title);
+                    App.ShowMessage(L.T("Sortowanie komentarzy: ", "Comment sort: ") + _commentSorts[_commentSort].Title);
                     return true;
                 }
                 break;
@@ -298,15 +301,15 @@ internal sealed class VideoView : View
         var txt = new Style(Theme.Text, Theme.Panel);
         if (iw > 10)
         {
-            if (_video.IsLive) y += 0 * s.Text(ix, y, " NA ŻYWO ", Theme.LiveS) + 1;
-            y += s.Paragraph(new Rect(ix, y, iw, 3), TextUtil.OneLine(_video.Title.Length > 0 ? _video.Title : "Wczytywanie…"), bold);
+            if (_video.IsLive) y += 0 * s.Text(ix, y, L.T(" NA ŻYWO ", " LIVE "), Theme.LiveS) + 1;
+            y += s.Paragraph(new Rect(ix, y, iw, 3), TextUtil.OneLine(_video.Title.Length > 0 ? _video.Title : L.T("Wczytywanie…", "Loading…")), bold);
             y++;
             var d = _details;
             if (_video.ChannelName.Length > 0)
             {
                 int cx = ix + s.Text(ix, y, _video.ChannelName, new Style(Theme.Text, Theme.Panel, Attr.Bold));
                 if (d?.ChannelSubscribers.Length > 0) s.TextTrunc(cx + 2, y, d.ChannelSubscribers, dim, ix + iw - cx - 2);
-                if (app.Library.IsSubscribed(_video.ChannelId)) s.TextRight(ix + iw, y, "✓ Subskrybujesz", new Style(Theme.Good, Theme.Panel));
+                if (app.Library.IsSubscribed(_video.ChannelId)) s.TextRight(ix + iw, y, L.T("✓ Subskrybujesz", "✓ Subscribed"), new Style(Theme.Good, Theme.Panel));
                 y++;
             }
             y++;
@@ -318,20 +321,20 @@ internal sealed class VideoView : View
                 if (d.LikesText.Length > 0) stats.Add("👍 " + d.LikesText);
                 if (_video.DurationText.Length > 0) stats.Add("⏱ " + _video.DurationText);
                 if (d.CommentsCount.Length > 0) stats.Add("💬 " + d.CommentsCount);
-                if (d.Chapters.Count > 0) stats.Add($"☰ {d.Chapters.Count} rozdz.");
+                if (d.Chapters.Count > 0) stats.Add(L.T($"☰ {d.Chapters.Count} rozdz.", $"☰ {d.Chapters.Count} chapters"));
                 if (stats.Count > 0) s.TextTrunc(ix, y++, string.Join("   ", stats), dim, iw);
             }
-            else if (_error != null) s.Paragraph(new Rect(ix, y, iw, 3), "Błąd: " + _error, new Style(Theme.Accent, Theme.Panel));
-            else s.Text(ix, y, app.Spinner + " Wczytywanie szczegółów…", dim);
+            else if (_error != null) s.Paragraph(new Rect(ix, y, iw, 3), L.T("Błąd: ", "Error: ") + _error, new Style(Theme.Accent, Theme.Panel));
+            else s.Text(ix, y, app.Spinner + L.T(" Wczytywanie szczegółów…", " Loading details…"), dim);
 
             y++;
             var flags = new List<string>();
             if (app.Library.GetHistory(_video.Id) is { } h && h.PositionSeconds > 5)
-                flags.Add($"▶ Wznowienie od {TextUtil.FormatSeconds(h.PositionSeconds)}");
-            if (app.Library.IsInWatchLater(_video.Id)) flags.Add("⏲ Na liście „Do obejrzenia”");
+                flags.Add(L.T($"▶ Wznowienie od {TextUtil.FormatSeconds(h.PositionSeconds)}", $"▶ Resume at {TextUtil.FormatSeconds(h.PositionSeconds)}"));
+            if (app.Library.IsInWatchLater(_video.Id)) flags.Add(L.T("⏲ Na liście „Do obejrzenia”", "⏲ In Watch later"));
             if (flags.Count > 0 && y < top.Bottom - 1) s.TextTrunc(ix, y++, string.Join("   ", flags), new Style(Theme.Warn, Theme.Panel), iw);
             if (top.Bottom - 2 > y)
-                s.Text(ix, top.Bottom - 2, " ▶ Odtwórz (Enter) ", new Style(0x0F0F0F, Theme.Text, Attr.Bold));
+                s.Text(ix, top.Bottom - 2, L.T(" ▶ Odtwórz (Enter) ", " ▶ Play (Enter) "), new Style(0x0F0F0F, Theme.Text, Attr.Bold));
         }
 
         // Zakładki
@@ -374,7 +377,7 @@ internal sealed class VideoView : View
         var desc = _details?.Description ?? _video.Description;
         if (string.IsNullOrWhiteSpace(desc))
         {
-            s.Text(r.X, r.Y, _details == null ? "" : "Brak opisu.", Theme.DimS);
+            s.Text(r.X, r.Y, _details == null ? "" : L.T("Brak opisu.", "No description."), Theme.DimS);
             return;
         }
         var lines = TextUtil.Wrap(desc, Math.Min(r.W, 120));
@@ -409,12 +412,12 @@ internal sealed class VideoView : View
     {
         if (_details != null && _details.CommentsToken == null)
         {
-            s.Text(r.X, r.Y, "Komentarze są wyłączone lub niedostępne.", Theme.DimS);
+            s.Text(r.X, r.Y, L.T("Komentarze są wyłączone lub niedostępne.", "Comments are turned off or unavailable."), Theme.DimS);
             return;
         }
         if (_comments.Count == 0)
         {
-            s.Text(r.X, r.Y, _commentsLoading || !_commentsLoaded ? App.Spinner + " Wczytywanie komentarzy…" : "Brak komentarzy.", Theme.DimS);
+            s.Text(r.X, r.Y, _commentsLoading || !_commentsLoaded ? App.Spinner + L.T(" Wczytywanie komentarzy…", " Loading comments…") : L.T("Brak komentarzy.", "No comments."), Theme.DimS);
             return;
         }
         if (_commentSorts.Count > 1)
@@ -457,7 +460,7 @@ internal sealed class VideoView : View
             x += s.Text(x, y, c.IsCreator ? " " + c.Author + " " : c.Author, authorSt);
             if (c.IsPinned) x += s.Text(x + 1, y, "📌", new Style(Theme.Text, bg)) + 1;
             s.TextTrunc(x + 2, y, ItemList.Join(c.Published, c.Likes.Length > 0 ? "👍 " + c.Likes : null,
-                c.ReplyCount > 0 && !c.IsReply ? $"💬 {c.ReplyCount} odp. (Enter)" : null), new Style(Theme.Dim, bg), r.X + w - x - 2);
+                c.ReplyCount > 0 && !c.IsReply ? L.T($"💬 {c.ReplyCount} odp. (Enter)", $"💬 {c.ReplyCount} replies (Enter)") : null), new Style(Theme.Dim, bg), r.X + w - x - 2);
             var lines = TextUtil.Wrap(c.Text, w - indent - 4);
             for (int l = 0; l < Math.Min(6, lines.Count) && y + 1 + l < r.Bottom; l++)
             {
@@ -465,10 +468,10 @@ internal sealed class VideoView : View
                 s.Text(r.X + 2 + indent, y + 1 + l, text, new Style(Theme.Text, bg), w - indent - 4);
             }
             if (_expandedLoading.Contains(i) && y + h - 1 < r.Bottom)
-                s.Text(r.X + 6, y + h - 1, App.Spinner + " wczytywanie odpowiedzi…", Theme.DimS);
+                s.Text(r.X + 6, y + h - 1, App.Spinner + L.T(" wczytywanie odpowiedzi…", " loading replies…"), Theme.DimS);
             y += h;
         }
-        if (_commentsLoading && y < r.Bottom) s.Text(r.X + 2, y, App.Spinner + " Wczytywanie kolejnych…", Theme.DimS);
+        if (_commentsLoading && y < r.Bottom) s.Text(r.X + 2, y, App.Spinner + L.T(" Wczytywanie kolejnych…", " Loading more…"), Theme.DimS);
         _ = blocks;
     }
 }

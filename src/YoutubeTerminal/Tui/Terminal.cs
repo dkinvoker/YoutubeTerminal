@@ -37,7 +37,7 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
     public void Init()
     {
         if (!Win32Console.GetConsoleMode(_out, out _origOut) || !Win32Console.GetConsoleMode(_in, out _origIn))
-            throw new InvalidOperationException("Ten program musi być uruchomiony w konsoli (np. Windows Terminal).");
+            throw new InvalidOperationException(L.T("Ten program musi być uruchomiony w terminalu (np. Windows Terminal).", "This program must run in a terminal (e.g. Windows Terminal)."));
 
         _origInCp = Win32Console.GetConsoleCP();
         _origOutCp = Win32Console.GetConsoleOutputCP();
@@ -46,7 +46,7 @@ internal sealed unsafe class Terminal : ITerminalOutput, IDisposable
 
         uint outMode = Win32Console.ENABLE_PROCESSED_OUTPUT | Win32Console.ENABLE_VIRTUAL_TERMINAL_PROCESSING | Win32Console.DISABLE_NEWLINE_AUTO_RETURN;
         if (!Win32Console.SetConsoleMode(_out, outMode))
-            throw new InvalidOperationException("Konsola nie obsługuje sekwencji VT. Użyj Windows Terminal.");
+            throw new InvalidOperationException(L.T("Konsola nie obsługuje sekwencji VT. Użyj Windows Terminal.", "The console does not support VT sequences. Use Windows Terminal."));
 
         uint inMode = Win32Console.ENABLE_VIRTUAL_TERMINAL_INPUT | Win32Console.ENABLE_WINDOW_INPUT | Win32Console.ENABLE_EXTENDED_FLAGS;
         Win32Console.SetConsoleMode(_in, inMode);

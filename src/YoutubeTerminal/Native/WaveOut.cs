@@ -106,7 +106,7 @@ internal sealed unsafe partial class WaveOut : IDisposable
             nAvgBytesPerSec = (uint)(sampleRate * channels * 2),
         };
         uint r = waveOutOpen(out _hwo, WAVE_MAPPER, &fmt, _event.SafeWaitHandle.DangerousGetHandle(), IntPtr.Zero, CALLBACK_EVENT);
-        if (r != 0) throw new InvalidOperationException($"Nie można otworzyć urządzenia audio (kod {r}).");
+        if (r != 0) throw new InvalidOperationException(L.T($"Nie można otworzyć urządzenia audio (kod {r}).", $"Cannot open the audio device (code {r})."));
 
         _bufferBytes = framesPerBuffer * BlockAlign;
         _headers = new WAVEHDR*[bufferCount];

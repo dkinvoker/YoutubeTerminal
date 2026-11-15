@@ -2,7 +2,8 @@ using YoutubeTerminal.Tui;
 
 namespace YoutubeTerminal.Graphics;
 
-internal enum RenderMode { Sixel, HalfBlock }
+/// <summary>Sposób rysowania obrazów: Sixel (piksele), oktanty (2×4 na komórkę) lub półbloki (1×2 na komórkę).</summary>
+internal enum RenderMode { Sixel, Octant, HalfBlock }
 
 /// <summary>Rozmiar obrazu w pikselach i jego położenie w komórkach.</summary>
 internal readonly record struct ImageLayout(int PixelWidth, int PixelHeight, Rect Cells);
@@ -69,20 +70,37 @@ internal sealed class ImageEncoder
         }
         else
         {
-            // Półblok: 1 komórka = 1×2 piksele; proporcja piksela = CellWidth / (CellHeight/2)
-            double pixelAspect = CellWidth / (CellHeight / 2.0);
-            int maxW = (int)(area.W * scale);
-            int maxH = (int)(area.H * 2 * scale);
+            // Znaki blokowe: komórka = px×py pikseli; proporcja piksela = (CellWidth/px) / (CellHeight/py).
+            var (cpx, cpy) = CellPixels(Mode);
+            double pixelAspect = (CellWidth / (double)cpx) / (CellHeight / (double)cpy);
+            int maxW = (int)(area.W * cpx * scale);
+            int maxH = (int)(area.H * cpy * scale);
             double srcAspect = (double)srcW / Math.Max(1, srcH) / pixelAspect;
             int w = maxW, h = (int)Math.Round(w / srcAspect);
             if (h > maxH) { h = maxH; w = (int)Math.Round(h * srcAspect); }
-            w = Math.Clamp(w, 1, area.W);
-            h = Math.Clamp(h & ~1, 2, area.H * 2);
-            int cols = w, rows = h / 2;
+            w = Math.Clamp(w / cpx * cpx, cpx, area.W * cpx);
+            h = Math.Clamp(h / cpy * cpy, cpy, area.H * cpy);
+            int cols = w / cpx, rows = h / cpy;
             int x = area.X + (area.W - cols) / 2;
             int y = area.Y + (area.H - rows) / 2;
             return new ImageLayout(w, h, new Rect(x, y, cols, rows));
         }
+    }
+
+    /// <summary>Pikseli obrazu na komórkę w trybach znakowych (Sixel: rozmiar liczony z komórki w px).</summary>
+    public static (int X, int Y) CellPixels(RenderMode mode) => mode switch
+    {
+        RenderMode.Octant => (Octants.CellPixelsX, Octants.CellPixelsY),
+        RenderMode.HalfBlock => (1, 2),
+        _ => (1, 1),
+    };
+
+    /// <summary>Rozmiar w pikselach obrazu wypełniającego cały obszar komórek.</summary>
+    public (int W, int H) PixelSize(Rect area)
+    {
+        if (Mode == RenderMode.Sixel) return (area.W * CellWidth, area.H * CellHeight / 6 * 6);
+        var (cpx, cpy) = CellPixels(Mode);
+        return (area.W * cpx, area.H * cpy);
     }
 
     /// <summary>Koduje bitmapę (o rozmiarze z <see cref="Layout"/>) do bajtów gotowych do zapisu (z pozycjonowaniem kursora).</summary>
@@ -90,7 +108,8 @@ internal sealed class ImageEncoder
     {
         _out.Clear();
         if (Mode == RenderMode.Sixel) EncodeSixel(px, w, h, cells, forVideo);
-        else EncodeHalfBlock(px, w, h, cells);
+        else if (Mode == RenderMode.Octant) Octants.EncodeRows(_out, px, w, 0, h, cells.X, cells.Y);
+        else EncodeHalfBlockRows(_out, px, w, 0, h, cells.X, cells.Y);
         return _out.ToArray();
     }
 
@@ -101,7 +120,7 @@ internal sealed class ImageEncoder
     {
         get
         {
-            if (Mode == RenderMode.HalfBlock) return 2;
+            if (Mode != RenderMode.Sixel) return 2;
             int g = Gcd(CellHeight, 6);
             int rows = 6 / g;
             while (rows * CellHeight < 48) rows += 6 / g; // paski nie za niskie (narzut nagłówków)
@@ -115,7 +134,7 @@ internal sealed class ImageEncoder
     public EncodedFrame EncodeVideoFrame(uint[] px, int w, int h, Rect cells)
     {
         int stripRows = StripRows;
-        int stripPx = Mode == RenderMode.Sixel ? stripRows * CellHeight : stripRows * 2;
+        int stripPx = Mode == RenderMode.Sixel ? stripRows * CellHeight : stripRows * CellPixels(Mode).Y;
         int count = (h + stripPx - 1) / stripPx;
         var frame = new EncodedFrame { Strips = new byte[count][], Signatures = new byte[count][] };
 
@@ -142,6 +161,8 @@ internal sealed class ImageEncoder
             int cy = cells.Y + s * stripRows;
             if (Mode == RenderMode.Sixel)
                 EncodeSixelStrip(st, idx, w, y0, sh, cells.X, cy);
+            else if (Mode == RenderMode.Octant)
+                Octants.EncodeRows(st.Out, px, w, y0, sh, cells.X, cy);
             else
                 EncodeHalfBlockRows(st.Out, px, w, y0, sh, cells.X, cy);
             frame.Strips[s] = st.Out.ToArray();
@@ -396,35 +417,6 @@ internal sealed class ImageEncoder
         {
             for (int i = 0; i < run; i++) o.Append(ch);
         }
-    }
-
-    private void EncodeHalfBlock(uint[] px, int w, int h, Rect cells)
-    {
-        var o = _out;
-        int rows = h / 2;
-        uint lastFg = 0xFFFFFFFF, lastBg = 0xFFFFFFFF;
-        for (int r = 0; r < rows; r++)
-        {
-            o.MoveTo(cells.X, cells.Y + r);
-            int top = (r * 2) * w, bot = (r * 2 + 1) * w;
-            for (int x = 0; x < w; x++)
-            {
-                uint t = px[top + x] & 0xFCFCFC;
-                uint b = px[bot + x] & 0xFCFCFC;
-                if (t == b)
-                {
-                    if (b != lastBg) { Bg(o, b); lastBg = b; }
-                    o.Append((byte)' ');
-                }
-                else
-                {
-                    if (t != lastFg) { Fg(o, t); lastFg = t; }
-                    if (b != lastBg) { Bg(o, b); lastBg = b; }
-                    o.Append(0xE2); o.Append(0x96); o.Append(0x80); // ▀
-                }
-            }
-        }
-        o.AppendAscii("\x1b[0m");
     }
 
     private static void Fg(ByteBuilder o, uint c)

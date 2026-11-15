@@ -27,8 +27,8 @@ internal static class Layouts
 /// <summary>Subskrypcje: najnowsze filmy z subskrybowanych kanałów (RSS) i lista kanałów.</summary>
 internal sealed class SubscriptionsView : View
 {
-    private readonly ItemList _feed = new() { EmptyText = "Brak filmów. Zasubskrybuj kanały klawiszem s." };
-    private readonly ItemList _channels = new() { EmptyText = "Nie subskrybujesz jeszcze żadnych kanałów. Na kanale lub filmie naciśnij s." };
+    private readonly ItemList _feed = new() { EmptyText = L.T("Brak filmów. Zasubskrybuj kanały klawiszem s.", "No videos. Subscribe to channels with the s key.") };
+    private readonly ItemList _channels = new() { EmptyText = L.T("Nie subskrybujesz jeszcze żadnych kanałów. Na kanale lub filmie naciśnij s.", "You have no subscriptions yet. Press s on a channel or video.") };
     private int _tab;
     private bool _dirty = true;
     private DateTime _loadedAt;
@@ -37,7 +37,7 @@ internal sealed class SubscriptionsView : View
     private CancellationTokenSource? _cts;
     private List<VideoItem> _allVideos = new();
 
-    public override string Title => "Subskrypcje";
+    public override string Title => L.T("Subskrypcje", "Subscriptions");
     public override ItemList? FocusedList => Current;
 
     public void MarkDirty() => _dirty = true;
@@ -96,11 +96,11 @@ internal sealed class SubscriptionsView : View
         {
             _allVideos = r.all.OrderByDescending(v => v.Published ?? DateTime.MinValue).ToList();
             ApplyFeedFilter();
-            if (r.errors > 0) App.ShowError($"Nie udało się pobrać {r.errors} kanał(ów).");
+            if (r.errors > 0) App.ShowError(L.T($"Nie udało się pobrać {r.errors} kanał(ów).", $"Could not load {r.errors} channel(s)."));
         }, ex =>
         {
             _feed.Loading = false;
-            _feed.Error = "Błąd: " + ex.Message;
+            _feed.Error = L.T("Błąd: ", "Error: ") + ex.Message;
         }, ct: ct);
     }
 
@@ -116,17 +116,17 @@ internal sealed class SubscriptionsView : View
     {
         get
         {
-            yield return ("Tab", _tab == 0 ? "Kanały" : "Najnowsze");
+            yield return ("Tab", _tab == 0 ? L.T("Kanały", "Channels") : L.T("Najnowsze", "Latest"));
             if (_tab == 0)
             {
-                yield return ("r", "Odśwież");
-                yield return ("h", _shorts ? "Ukryj Shorts" : "Pokaż Shorts");
+                yield return ("r", L.T("Odśwież", "Refresh"));
+                yield return ("h", _shorts ? L.T("Ukryj Shorts", "Hide Shorts") : L.T("Pokaż Shorts", "Show Shorts"));
                 foreach (var h in App.ItemHints(_feed.Current).Where(h => h.Item1 is "Enter" or "p" or "w" or "c")) yield return h;
             }
             else
             {
-                yield return ("Enter", "Otwórz kanał");
-                yield return ("Del", "Anuluj subskrypcję");
+                yield return ("Enter", L.T("Otwórz kanał", "Open channel"));
+                yield return ("Del", L.T("Anuluj subskrypcję", "Unsubscribe"));
             }
         }
     }
@@ -138,11 +138,11 @@ internal sealed class SubscriptionsView : View
         if (k.Key == Key.Tab || k.Key == Key.BackTab || k.Key == Key.Left || k.Key == Key.Right) { _tab = 1 - _tab; return true; }
         var list = Current;
         if (list.HandleKey(k)) return true;
-        if (k.Is('r')) { Reload(); App.ShowMessage("Odświeżanie subskrypcji…"); return true; }
+        if (k.Is('r')) { Reload(); App.ShowMessage(L.T("Odświeżanie subskrypcji…", "Refreshing subscriptions…")); return true; }
         if (k.Is('h') && _tab == 0) { _shorts = !_shorts; ApplyFeedFilter(); return true; }
         if (_tab == 1 && (k.Key == Key.Delete || k.Is('x') || k.Is('s')) && list.Current is ChannelItem ch)
         {
-            App.Confirm("Anulować subskrypcję?", $"Kanał „{ch.Title}” zniknie z subskrypcji.", () =>
+            App.Confirm(L.T("Anulować subskrypcję?", "Unsubscribe?"), L.T($"Kanał „{ch.Title}” zniknie z subskrypcji.", $"“{ch.Title}” will be removed from your subscriptions."), () =>
             {
                 App.ToggleSubscribe(ch);
                 RefreshChannels();
@@ -164,12 +164,12 @@ internal sealed class SubscriptionsView : View
     {
         int x = area.X + 2;
         int y = area.Y + 1;
-        x += s.Text(x, y, " Najnowsze filmy ", _tab == 0 ? new Style(Theme.Text, Theme.Bg, Attr.Bold | Attr.Underline) : Theme.DimS) + 1;
-        x += s.Text(x, y, $" Kanały ({App.Library.Data.Subscriptions.Count}) ", _tab == 1 ? new Style(Theme.Text, Theme.Bg, Attr.Bold | Attr.Underline) : Theme.DimS);
+        x += s.Text(x, y, L.T(" Najnowsze filmy ", " Latest videos "), _tab == 0 ? new Style(Theme.Text, Theme.Bg, Attr.Bold | Attr.Underline) : Theme.DimS) + 1;
+        x += s.Text(x, y, L.T($" Kanały ({App.Library.Data.Subscriptions.Count}) ", $" Channels ({App.Library.Data.Subscriptions.Count}) "), _tab == 1 ? new Style(Theme.Text, Theme.Bg, Attr.Bold | Attr.Underline) : Theme.DimS);
         if (_tab == 0 && _feed.Loading && _totalCount > 0)
-            s.TextRight(area.Right - 2, y, $"{App.Spinner} kanały {_loadedCount}/{_totalCount}", Theme.DimS);
+            s.TextRight(area.Right - 2, y, L.T($"{App.Spinner} kanały {_loadedCount}/{_totalCount}", $"{App.Spinner} channels {_loadedCount}/{_totalCount}"), Theme.DimS);
         else if (_tab == 0 && _feed.Items.Count > 0)
-            s.TextRight(area.Right - 2, y, $"odświeżono {YouTubeClient.RelativeTime(_loadedAt)}" + (_shorts ? "" : " · bez Shorts"), Theme.MutedS);
+            s.TextRight(area.Right - 2, y, L.T("odświeżono ", "refreshed ") + YouTubeClient.RelativeTime(_loadedAt) + (_shorts ? "" : L.T(" · bez Shorts", " · no Shorts")), Theme.MutedS);
         s.HLine(area.X, y + 1, area.W, new Style(0x272727, Theme.Bg));
         Layouts.ListWithPreview(s, new Rect(area.X, y + 2, area.W, area.Bottom - y - 2), Current);
     }
@@ -178,7 +178,7 @@ internal sealed class SubscriptionsView : View
 /// <summary>Historia oglądania z postępem i wznawianiem.</summary>
 internal sealed class HistoryView : View
 {
-    private readonly ItemList _list = new() { EmptyText = "Historia jest pusta." };
+    private readonly ItemList _list = new() { EmptyText = L.T("Historia jest pusta.", "Your history is empty.") };
 
     public HistoryView()
     {
@@ -191,7 +191,7 @@ internal sealed class HistoryView : View
         };
     }
 
-    public override string Title => "Historia";
+    public override string Title => L.T("Historia", "History");
     public override ItemList? FocusedList => _list;
 
     public override void OnShow() => Refresh();
@@ -207,11 +207,11 @@ internal sealed class HistoryView : View
     {
         get
         {
-            yield return ("Enter", "Szczegóły");
-            yield return ("p", "Wznów");
-            yield return ("Del", "Usuń");
-            yield return ("C", "Wyczyść");
-            yield return ("c", "Kanał");
+            yield return ("Enter", L.T("Szczegóły", "Details"));
+            yield return ("p", L.T("Wznów", "Resume"));
+            yield return ("Del", L.T("Usuń", "Remove"));
+            yield return ("C", L.T("Wyczyść", "Clear"));
+            yield return ("c", L.T("Kanał", "Channel"));
         }
     }
 
@@ -228,7 +228,7 @@ internal sealed class HistoryView : View
         }
         if (k.Is('C'))
         {
-            App.Confirm("Wyczyścić historię?", "Wszystkie wpisy historii oglądania zostaną usunięte.", () =>
+            App.Confirm(L.T("Wyczyścić historię?", "Clear history?"), L.T("Wszystkie wpisy historii oglądania zostaną usunięte.", "All watch history entries will be deleted."), () =>
             {
                 App.Library.ClearHistory();
                 Refresh();
@@ -252,7 +252,7 @@ internal sealed class HistoryView : View
 
     public override void Render(ScreenBuffer s, Rect area)
     {
-        Layouts.SectionHeader(s, area, "Historia oglądania", $"{YouTubeClient.Plural(App.Library.Data.History.Count, "film", "filmy", "filmów")} · zapisywana lokalnie");
+        Layouts.SectionHeader(s, area, L.T("Historia oglądania", "Watch history"), YouTubeClient.Count(App.Library.Data.History.Count, "film", "filmy", "filmów", "video", "videos") + L.T(" · zapisywana lokalnie", " · stored locally"));
         Layouts.ListWithPreview(s, new Rect(area.X, area.Y + 3, area.W, area.H - 3), _list);
     }
 }
@@ -260,9 +260,9 @@ internal sealed class HistoryView : View
 /// <summary>Lista „Do obejrzenia”.</summary>
 internal sealed class WatchLaterView : View
 {
-    private readonly ItemList _list = new() { EmptyText = "Lista jest pusta. Dodawaj filmy klawiszem w." };
+    private readonly ItemList _list = new() { EmptyText = L.T("Lista jest pusta. Dodawaj filmy klawiszem w.", "The list is empty. Add videos with the w key.") };
 
-    public override string Title => "Do obejrzenia";
+    public override string Title => L.T("Do obejrzenia", "Watch later");
     public override ItemList? FocusedList => _list;
 
     public override void OnShow()
@@ -276,10 +276,10 @@ internal sealed class WatchLaterView : View
     {
         get
         {
-            yield return ("Enter", "Szczegóły");
-            yield return ("p", "Odtwórz");
-            yield return ("P", "Odtwórz wszystkie");
-            yield return ("Del", "Usuń");
+            yield return ("Enter", L.T("Szczegóły", "Details"));
+            yield return ("p", L.T("Odtwórz", "Play"));
+            yield return ("P", L.T("Odtwórz wszystkie", "Play all"));
+            yield return ("Del", L.T("Usuń", "Remove"));
         }
     }
 
@@ -292,7 +292,7 @@ internal sealed class WatchLaterView : View
         {
             App.Library.ToggleWatchLater(v);
             OnShow();
-            App.ShowMessage("Usunięto z „Do obejrzenia”");
+            App.ShowMessage(L.T("Usunięto z „Do obejrzenia”", "Removed from Watch later"));
             return true;
         }
         if (k.Is('P'))
@@ -313,7 +313,7 @@ internal sealed class WatchLaterView : View
 
     public override void Render(ScreenBuffer s, Rect area)
     {
-        Layouts.SectionHeader(s, area, "Do obejrzenia", YouTubeClient.Plural(App.Library.Data.WatchLater.Count, "film", "filmy", "filmów"));
+        Layouts.SectionHeader(s, area, L.T("Do obejrzenia", "Watch later"), YouTubeClient.Count(App.Library.Data.WatchLater.Count, "film", "filmy", "filmów", "video", "videos"));
         Layouts.ListWithPreview(s, new Rect(area.X, area.Y + 3, area.W, area.H - 3), _list);
     }
 }

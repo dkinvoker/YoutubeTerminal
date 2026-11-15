@@ -73,8 +73,7 @@ internal sealed class ImageService
                     byte[] bytes;
                     if (cover)
                     {
-                        int pw = mode == RenderMode.Sixel ? area.W * cw : area.W;
-                        int ph = mode == RenderMode.Sixel ? area.H * ch / 6 * 6 : area.H * 2;
+                        var (pw, ph) = enc.PixelSize(area);
                         var scaled = bmp.CoverInto(pw, ph);
                         bytes = enc.Encode(scaled, area);
                     }

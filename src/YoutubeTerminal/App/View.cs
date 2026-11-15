@@ -73,10 +73,11 @@ internal sealed class ConfirmModal : Modal
         var st = new Style(Theme.Text, Theme.Raised);
         for (int i = 0; i < lines.Count; i++) s.Text(r.X + 3, r.Y + 2 + i, lines[i], st, r.W - 6);
         int by = r.Bottom - 2;
-        s.Text(r.X + 3, by, " T ", Theme.KeyS);
-        s.Text(r.X + 7, by, "Tak", st);
-        s.Text(r.X + 13, by, " N ", Theme.KeyS);
-        s.Text(r.X + 17, by, "Nie", st);
+        int x = r.X + 3;
+        x += s.Text(x, by, L.T(" T ", " Y "), Theme.KeyS) + 1;
+        x += s.Text(x, by, L.T("Tak", "Yes"), st) + 3;
+        x += s.Text(x, by, " N ", Theme.KeyS) + 1;
+        s.Text(x, by, L.T("Nie", "No"), st);
     }
 
     public override bool HandleKey(KeyEvent k)
@@ -94,57 +95,57 @@ internal sealed class HelpModal : Modal
 {
     private int _scroll;
 
-    private static readonly (string Section, (string Key, string Text)[] Items)[] Groups =
+    private static (string Section, (string Key, string Text)[] Items)[] Groups =>
     [
-        ("Ogólne",
+        (L.T("Ogólne", "General"),
         [
-            ("1 … 5", "Szukaj · Subskrypcje · Historia · Do obejrzenia · Ustawienia"),
-            ("/", "Przejdź do wyszukiwarki"),
-            ("Esc / Backspace", "Wstecz"),
-            ("q", "Wstecz / wyjście z programu"),
-            ("Ctrl+C", "Wyjście"),
-            ("Ctrl+L", "Odśwież ekran"),
-            ("F1 / ?", "Ta pomoc"),
+            ("1 … 5", L.T("Szukaj · Subskrypcje · Historia · Do obejrzenia · Ustawienia", "Search · Subscriptions · History · Watch later · Settings")),
+            ("/", L.T("Przejdź do wyszukiwarki", "Go to search")),
+            ("Esc / Backspace", L.T("Wstecz", "Back")),
+            ("q", L.T("Wstecz / wyjście z programu", "Back / quit")),
+            ("Ctrl+C", L.T("Wyjście", "Quit")),
+            ("Ctrl+L", L.T("Odśwież ekran", "Redraw the screen")),
+            ("F1 / ?", L.T("Ta pomoc", "This help")),
         ]),
-        ("Listy",
+        (L.T("Listy", "Lists"),
         [
-            ("↑ ↓  PgUp PgDn  Home End", "Nawigacja (kółko myszy też działa)"),
-            ("Enter", "Otwórz film / kanał / playlistę"),
-            ("p / Spacja", "Odtwórz od razu"),
-            ("a", "Odtwórz tylko dźwięk"),
-            ("c", "Kanał autora"),
-            ("w", "Dodaj/usuń z „Do obejrzenia”"),
-            ("s", "Subskrybuj / anuluj subskrypcję"),
-            ("y / o", "Kopiuj link / otwórz w przeglądarce"),
-            ("Tab", "Filtr wyników (Wszystko/Filmy/Kanały/Playlisty) lub zakładki"),
-            ("Shift+Tab", "Sortowanie"),
+            ("↑ ↓  PgUp PgDn  Home End", L.T("Nawigacja (kółko myszy też działa)", "Navigate (the mouse wheel works too)")),
+            ("Enter", L.T("Otwórz film / kanał / playlistę", "Open a video / channel / playlist")),
+            (L.T("p / Spacja", "p / Space"), L.T("Odtwórz od razu", "Play now")),
+            ("a", L.T("Odtwórz tylko dźwięk", "Play audio only")),
+            ("c", L.T("Kanał autora", "Go to the channel")),
+            ("w", L.T("Dodaj/usuń z „Do obejrzenia”", "Add to / remove from Watch later")),
+            ("s", L.T("Subskrybuj / anuluj subskrypcję", "Subscribe / unsubscribe")),
+            ("y / o", L.T("Kopiuj link / otwórz w przeglądarce", "Copy link / open in the browser")),
+            ("Tab", L.T("Filtr wyników (Wszystko/Filmy/Kanały/Playlisty) lub zakładki", "Result filter (All/Videos/Channels/Playlists) or tabs")),
+            ("Shift+Tab", L.T("Sortowanie", "Sort order")),
         ]),
-        ("Odtwarzacz",
+        (L.T("Odtwarzacz", "Player"),
         [
-            ("Spacja / k", "Pauza / wznów"),
-            ("← →", "Przewiń 5 s"),
-            ("j l", "Przewiń 10 s"),
-            ("PgUp PgDn / Shift+← →", "Przewiń 60 s"),
-            ("0 … 9", "Skocz do 0%–90%"),
-            ("Home End", "Początek / koniec"),
-            ("↑ ↓ / + -", "Głośność"),
-            ("m", "Wycisz"),
-            (", .", "Poprzedni / następny rozdział"),
-            ("n / N", "Następny / poprzedni film z kolejki"),
-            ("f", "Tryb pełnoekranowy"),
-            ("v", "Sixel ↔ półbloki"),
-            ("d", "Paleta adaptacyjna ↔ stała z ditheringiem"),
-            ("[ ]", "Rozmiar obrazu"),
-            ("a", "Tylko dźwięk"),
-            ("i", "Statystyki"),
-            ("q / Esc", "Zamknij odtwarzacz"),
+            (L.T("Spacja / k", "Space / k"), L.T("Pauza / wznów", "Pause / resume")),
+            ("← →", L.T("Przewiń 5 s", "Seek 5 s")),
+            ("j l", L.T("Przewiń 10 s", "Seek 10 s")),
+            ("PgUp PgDn / Shift+← →", L.T("Przewiń 60 s", "Seek 60 s")),
+            ("0 … 9", L.T("Skocz do 0%–90%", "Jump to 0%–90%")),
+            ("Home End", L.T("Początek / koniec", "Start / end")),
+            ("↑ ↓ / + -", L.T("Głośność", "Volume")),
+            ("m", L.T("Wycisz", "Mute")),
+            (", .", L.T("Poprzedni / następny rozdział", "Previous / next chapter")),
+            ("n / N", L.T("Następny / poprzedni film z kolejki", "Next / previous video in the queue")),
+            ("f", L.T("Tryb pełnoekranowy", "Full screen")),
+            ("v", L.T("Tryb obrazu: Sixel → oktanty → półbloki", "Picture mode: Sixel → octants → half blocks")),
+            ("d", L.T("Paleta adaptacyjna ↔ stała z ditheringiem", "Adaptive palette ↔ fixed palette with dithering")),
+            ("[ ]", L.T("Rozmiar obrazu", "Picture size")),
+            ("a", L.T("Tylko dźwięk", "Audio only")),
+            ("i", L.T("Statystyki", "Statistics")),
+            ("q / Esc", L.T("Zamknij odtwarzacz", "Close the player")),
         ]),
     ];
 
     public override void Render(ScreenBuffer s, Rect screen)
     {
         var r = Centered(screen, 84, screen.H - 2);
-        Frame(s, r, "Pomoc — skróty klawiszowe");
+        Frame(s, r, L.T("Pomoc — skróty klawiszowe", "Help — keyboard shortcuts"));
         var inner = r.Inset(3, 2);
         var lines = new List<(string, string, bool)>();
         foreach (var g in Groups)
@@ -167,7 +168,7 @@ internal sealed class HelpModal : Modal
                 s.TextTrunc(inner.X + 30, inner.Y + i, b, st, inner.W - 30);
             }
         }
-        s.TextRight(r.Right - 3, r.Bottom - 1, " Esc — zamknij ", new Style(Theme.Dim, Theme.Raised));
+        s.TextRight(r.Right - 3, r.Bottom - 1, L.T(" Esc — zamknij ", " Esc — close "), new Style(Theme.Dim, Theme.Raised));
     }
 
     public override bool HandleKey(KeyEvent k)
